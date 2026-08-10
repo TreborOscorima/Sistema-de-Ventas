@@ -100,7 +100,7 @@ def config_nav() -> rx.Component:
             class_name=rx.cond(
               State.config_tab == section["key"],
               "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
-              "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
+              "w-full text-left bg-white text-slate-700 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-50",
             ),
           ),
           rx.fragment(),
@@ -122,7 +122,7 @@ def config_nav() -> rx.Component:
           class_name=rx.cond(
             State.config_tab == section["key"],
             "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
-            "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
+            "w-full text-left bg-white text-slate-700 border border-slate-200 px-3 py-2 rounded-md hover:bg-slate-50",
           ),
         )
         for section in CONFIG_SECTIONS

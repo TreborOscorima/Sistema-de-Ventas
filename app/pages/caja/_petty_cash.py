@@ -257,13 +257,13 @@ def petty_cash_view() -> rx.Component:
                   ),
                   class_name="py-2 px-3 text-center",
                 ),
-                class_name="border-b hover:bg-slate-50 transition-colors",
+                class_name="border-b border-slate-200 hover:bg-slate-50 transition-colors",
               ),
             )
           ),
           class_name="min-w-full",
         ),
-        class_name="hidden md:block overflow-x-auto w-full border-t",
+        class_name="hidden md:block overflow-x-auto w-full border-t border-slate-200",
       ),
       rx.cond(
         State.petty_cash_movements.length() > 0,

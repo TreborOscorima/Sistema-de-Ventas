@@ -56,7 +56,7 @@ def _quot_save_modal() -> rx.Component:
                         on_click=State.close_quot_save_modal,
                         class_name="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100",
                     ),
-                    class_name="flex items-center justify-between p-4 border-b",
+                    class_name="flex items-center justify-between p-4 border-b border-slate-200",
                 ),
                 # Body
                 rx.el.div(
@@ -120,7 +120,7 @@ def _quot_save_modal() -> rx.Component:
                             "hover:bg-slate-50 transition-colors"
                         ),
                     ),
-                    class_name="flex gap-2 justify-end p-4 border-t bg-slate-50",
+                    class_name="flex gap-2 justify-end p-4 border-t border-slate-200 bg-slate-50",
                 ),
                 class_name="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4",
             ),
@@ -229,7 +229,7 @@ def _quot_load_drawer() -> rx.Component:
                         on_click=State.close_pos_quot_drawer,
                         class_name="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100",
                     ),
-                    class_name="flex items-center justify-between p-4 border-b shrink-0",
+                    class_name="flex items-center justify-between p-4 border-b border-slate-200 shrink-0",
                 ),
                 # Buscador
                 rx.el.div(
@@ -255,7 +255,7 @@ def _quot_load_drawer() -> rx.Component:
                         ),
                         rx.fragment(),
                     ),
-                    class_name="p-3 border-b shrink-0",
+                    class_name="p-3 border-b border-slate-200 shrink-0",
                 ),
                 # Resultados
                 rx.el.div(
@@ -309,9 +309,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-600 text-white"
     )
     pm_btn_inactive = (
-        "flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white text-slate-700 hover:bg-slate-50 w-full justify-center"
+        "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 w-full justify-center"
         if is_desktop else
-        "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     pm_name_class = (
         "text-xs uppercase font-medium"
@@ -328,9 +328,9 @@ def _payment_form_body(variant: str) -> tuple:
 
     # ── Credit section wrapper class ────────────────────────────────────────
     credit_section_class = (
-        "px-3 py-2 border-b"
+        "px-3 py-2 border-b border-slate-200"
         if is_desktop else
-        "px-3 sm:px-4 pb-3 border-b"
+        "px-3 sm:px-4 pb-3 border-b border-slate-200"
     )
 
     # ── Cash input key suffix ───────────────────────────────────────────────
@@ -345,9 +345,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 border-0 focus:ring-0 text-xl font-semibold bg-transparent outline-none text-right"
     )
     cash_row_class = (
-        "flex items-center gap-2 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500"
+        "flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500"
         if is_desktop else
-        "flex items-center gap-2 px-3 py-3 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500"
+        "flex items-center gap-2 px-3 py-3 border border-slate-200 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500"
     )
     cash_label_class = (
         "text-xs font-medium text-slate-600"
@@ -385,9 +385,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium"
     )
     card_btn_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     yape_btn_active = (
         "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium"
@@ -395,9 +395,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-purple-600 text-white font-medium"
     )
     yape_btn_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     plin_btn_active = (
         "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium"
@@ -405,9 +405,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-teal-600 text-white font-medium"
     )
     plin_btn_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     mixed_btn_active = (
         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium"
@@ -415,9 +415,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium"
     )
     mixed_btn_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     mixed_yape_active = (
         "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium"
@@ -425,9 +425,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-purple-600 text-white font-medium"
     )
     mixed_yape_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     mixed_plin_active = (
         "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium"
@@ -435,9 +435,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex-1 px-3 py-2.5 rounded-lg bg-teal-600 text-white font-medium"
     )
     mixed_plin_inactive = (
-        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50"
+        "flex-1 px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm hover:bg-slate-50"
         if is_desktop else
-        "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
+        "flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
     )
     mixed_section_class = (
         "flex flex-col gap-3"
@@ -447,7 +447,7 @@ def _payment_form_body(variant: str) -> tuple:
 
     # ── Options section wrapper class ───────────────────────────────────────
     options_section_class = (
-        "px-3 py-2 border-b min-h-[64px]"
+        "px-3 py-2 border-b border-slate-200 min-h-[64px]"
         if is_desktop else
         ""
     )
@@ -474,9 +474,9 @@ def _payment_form_body(variant: str) -> tuple:
         "flex flex-col items-center"
     )
     footer_class = (
-        "shrink-0 bg-white border-t"
+        "shrink-0 bg-white border-t border-slate-200"
         if is_desktop else
-        "p-3 sm:p-4 bg-slate-50 border-t"
+        "p-3 sm:p-4 bg-slate-50 border-t border-slate-200"
     )
 
     # ── Confirm button classes ──────────────────────────────────────────────
@@ -575,7 +575,7 @@ def _payment_form_body(variant: str) -> tuple:
                 pm_buttons,
                 class_name=pm_grid_class,
             ),
-            class_name="p-2 border-b",
+            class_name="p-2 border-b border-slate-200",
         )
     else:
         pm_section = rx.el.div(
@@ -594,7 +594,7 @@ def _payment_form_body(variant: str) -> tuple:
                     min="1",
                     default_value=State.credit_installments.to_string(),
                     on_blur=lambda value: State.set_installments_count(value),
-                    class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                    class_name="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm",
                 ),
                 class_name="flex flex-col gap-1",
             ),
@@ -605,7 +605,7 @@ def _payment_form_body(variant: str) -> tuple:
                     min="1",
                     default_value=State.credit_interval_days.to_string(),
                     on_blur=lambda value: State.set_payment_interval_days(value),
-                    class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                    class_name="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm",
                 ),
                 class_name="flex flex-col gap-1",
             ),
@@ -617,7 +617,7 @@ def _payment_form_body(variant: str) -> tuple:
                     step="0.01",
                     default_value=State.credit_initial_payment,
                     on_blur=lambda value: State.set_credit_initial_payment(value),
-                    class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                    class_name="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm",
                 ),
                 class_name="flex flex-col gap-1",
             ),
@@ -631,7 +631,7 @@ def _payment_form_body(variant: str) -> tuple:
                     " cuotas",
                     class_name="text-xs text-slate-600",
                 ),
-                class_name="px-3 py-2 rounded-lg bg-slate-50 border",
+                class_name="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200",
             ),
             class_name="flex flex-col gap-3 mt-3",
         ),
@@ -759,7 +759,7 @@ def _payment_form_body(variant: str) -> tuple:
                         disabled=True,
                         class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),
-                    class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50",
+                    class_name="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg bg-slate-50",
                 ),
                 class_name="flex flex-col gap-1",
             ),
@@ -914,7 +914,7 @@ def payment_sidebar() -> rx.Component:
     return rx.el.aside(
         scrollable,
         footer,
-        class_name="w-full max-w-[22rem] bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
+        class_name="w-full max-w-[22rem] bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
     )
 
 
@@ -936,7 +936,7 @@ def payment_mobile_section() -> rx.Component:
                 rx.el.span("Cobro", class_name="font-bold text-slate-800"),
                 class_name="flex items-center gap-2",
             ),
-            class_name="p-3 sm:p-4 border-b",
+            class_name="p-3 sm:p-4 border-b border-slate-200",
         ),
         pm_section,
         credit_section,
@@ -944,5 +944,5 @@ def payment_mobile_section() -> rx.Component:
         wallet_option,
         mixed_option,
         footer,
-        class_name="bg-white rounded-xl border shadow-sm lg:hidden",
+        class_name="bg-white rounded-xl border border-slate-200 shadow-sm lg:hidden",
     )

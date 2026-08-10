@@ -113,12 +113,13 @@ config = rx.Config(
                 gray_color="slate",
             )
         ),
-        rx.plugins.TailwindV3Plugin(
+        rx.plugins.TailwindV4Plugin(
             config={
-                "plugins": ["@tailwindcss/typography@0.5.19"],
+                "plugins": ["@tailwindcss/typography@0.5.20"],
                 # Reflex 0.9.x compila los componentes compartidos (header, layout, etc.)
                 # a `.web/app_components/**`, que NO está en el content-glob por defecto
-                # (`./app/**`, `./utils/**`). Sin esto, las clases usadas SOLO en esos
+                # (`./app/**`, `./utils/**`). Con `@config`, Tailwind v4 usa este content
+                # explícito y NO auto-detecta, así que las clases usadas SOLO en esos
                 # componentes (p. ej. `md:inline-flex` de los CTA Ingresar/Registro del
                 # header de la landing) no se generan y quedan ocultas. Al pasar `content`
                 # explícito reemplazamos el default, así que incluimos todo el set.

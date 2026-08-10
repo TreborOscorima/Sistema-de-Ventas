@@ -182,7 +182,7 @@ def billing_config_section() -> rx.Component:
         rx.el.div(
           rx.el.h3(
             "API de Consulta RUC/DNI",
-            class_name="text-base font-semibold text-slate-600 border-b pb-1",
+            class_name="text-base font-semibold text-slate-600 border-b border-slate-200 pb-1",
           ),
           rx.el.div(
             rx.el.div(
@@ -228,7 +228,7 @@ def billing_config_section() -> rx.Component:
         rx.el.div(
           rx.el.h3(
             "Configuración Fiscal Argentina",
-            class_name="text-base font-semibold text-slate-600 border-b pb-1",
+            class_name="text-base font-semibold text-slate-600 border-b border-slate-200 pb-1",
           ),
           rx.el.div(
             rx.el.div(
@@ -436,7 +436,7 @@ def billing_config_section() -> rx.Component:
         rx.el.div(
           rx.el.h3(
             "Series y Numeración",
-            class_name="text-base font-semibold text-slate-600 border-b pb-1",
+            class_name="text-base font-semibold text-slate-600 border-b border-slate-200 pb-1",
           ),
           rx.el.div(
             rx.el.div(

@@ -30,7 +30,7 @@ def compras_page() -> rx.Component:
     class_name=rx.cond(
       State.purchases_active_tab == "registro",
       f"{tab_button} bg-indigo-600 text-white",
-      f"{tab_button} bg-white text-slate-600 border",
+      f"{tab_button} bg-white text-slate-600 border border-slate-200",
     ),
   )
   proveedores_button = rx.el.button(
@@ -39,7 +39,7 @@ def compras_page() -> rx.Component:
     class_name=rx.cond(
       State.purchases_active_tab == "proveedores",
       f"{tab_button} bg-indigo-600 text-white",
-      f"{tab_button} bg-white text-slate-600 border",
+      f"{tab_button} bg-white text-slate-600 border border-slate-200",
     ),
   )
 

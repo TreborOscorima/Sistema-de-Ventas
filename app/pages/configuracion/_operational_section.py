@@ -74,7 +74,7 @@ def currency_section() -> rx.Component:
         on_click=State.add_currency,
         class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200 items-end",
     ),
     rx.el.div(
       rx.el.span("Moneda activa:", class_name="text-xs text-slate-600"),
@@ -125,7 +125,7 @@ def currency_section() -> rx.Component:
               "Seleccionar",
               on_click=lambda _,
               code=currency["code"]: State.set_currency(code),
-              class_name="px-3 py-1 rounded-md border text-xs hover:bg-slate-50",
+              class_name="px-3 py-1 rounded-md border border-slate-200 text-xs hover:bg-slate-50",
             ),
             rx.el.button(
               rx.icon("trash-2", class_name="h-4 w-4"),
@@ -188,7 +188,7 @@ def unit_section() -> rx.Component:
         on_click=State.add_unit,
         class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200 items-end",
     ),
     rx.el.div(
       rx.foreach(
@@ -312,7 +312,7 @@ def payment_methods_section() -> rx.Component:
         on_click=State.add_payment_method,
         class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200 items-end",
     ),
     rx.el.div(
       rx.foreach(

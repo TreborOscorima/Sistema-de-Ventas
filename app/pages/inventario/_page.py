@@ -494,7 +494,7 @@ def inventario_page() -> rx.Component:
                   ),
                   class_name="py-3 px-4",
                 ),
-                class_name="border-b",
+                class_name="border-b border-slate-200",
               ),
             )
           ),

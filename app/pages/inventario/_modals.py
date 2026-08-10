@@ -222,7 +222,7 @@ def import_modal() -> rx.Component:
               ),
               class_name="min-w-full text-sm",
             ),
-            class_name="max-h-52 overflow-y-auto overflow-x-auto border rounded-lg",
+            class_name="max-h-52 overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg",
           ),
         ),
         rx.fragment(),
@@ -337,7 +337,7 @@ def stock_details_modal() -> rx.Component:
                     row["stock"].to_string(),
                     class_name="py-2 px-3 text-center",
                   ),
-                  class_name="border-b",
+                  class_name="border-b border-slate-200",
                 ),
               )
             ),
@@ -367,7 +367,7 @@ def stock_details_modal() -> rx.Component:
                       row["stock"].to_string(),
                       class_name="py-2 px-3 text-center",
                     ),
-                    class_name="border-b",
+                    class_name="border-b border-slate-200",
                   ),
                 )
               ),
@@ -432,7 +432,7 @@ def inventory_adjustment_modal() -> rx.Component:
                         class_name=rx.cond(
                             State.inventory_check_status == "perfecto",
                             "h-10 px-4 rounded-md bg-indigo-600 text-white font-medium flex items-center justify-center gap-2",
-                            "h-10 px-4 rounded-md border text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2",
+                            "h-10 px-4 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2",
                         ),
                     ),
                     rx.el.button(
@@ -442,7 +442,7 @@ def inventory_adjustment_modal() -> rx.Component:
                         class_name=rx.cond(
                             State.inventory_check_status == "ajuste",
                             "h-10 px-4 rounded-md bg-amber-600 text-white font-medium flex items-center justify-center gap-2",
-                            "h-10 px-4 rounded-md border text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2",
+                            "h-10 px-4 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2",
                         ),
                     ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-3",
@@ -664,13 +664,13 @@ def inventory_adjustment_modal() -> rx.Component:
                           ),
                           class_name="py-2 px-3 text-center",
                         ),
-                        class_name="border-b",
+                        class_name="border-b border-slate-200",
                       ),
                     )
                   ),
                   class_name="w-full text-sm",
                 ),
-                class_name="mt-6 rounded-lg border overflow-x-auto",
+                class_name="mt-6 rounded-lg border border-slate-200 overflow-x-auto",
               ),
               rx.el.p(
                 "Aun no hay productos seleccionados para el ajuste.",

@@ -342,7 +342,7 @@ def debtor_row(client: rx.Var[dict]) -> rx.Component:
             ),
             class_name="py-3 px-4 align-middle",
         ),
-    class_name="border-b hover:bg-slate-50 transition-colors",
+    class_name="border-b border-slate-200 hover:bg-slate-50 transition-colors",
   )
 
 
@@ -414,8 +414,8 @@ def installment_overview_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     class_name=rx.cond(
       installment["is_overdue"],
-      "border-b bg-red-50/40",
-      "border-b",
+      "border-b border-slate-200 bg-red-50/40",
+      "border-b border-slate-200",
     ),
   )
 
@@ -547,8 +547,8 @@ def installment_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     class_name=rx.cond(
       installment["is_overdue"],
-      "border-b bg-red-50/40",
-      "border-b",
+      "border-b border-slate-200 bg-red-50/40",
+      "border-b border-slate-200",
     ),
   )
 
