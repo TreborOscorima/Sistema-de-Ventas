@@ -2,7 +2,7 @@
 
 **Creado:** 2026-08-09
 **Autor:** Trebor Oscorima + Claude Code
-**Estado:** 🟡 PLANIFICACIÓN — ninguna fase ejecutada aún
+**Estado:** ✅ COMPLETADO — SHOP en producción 0.9.8 (FASE 1→10 OK, deploy 2026-08-10). Solo restan follow-ups (deuda técnica) y limpieza.
 **Propósito:** Guía sesión a sesión, retomable en cualquier punto sin perder contexto.
 **Alcance:** Este documento cubre **SHOP (Sistema-de-Ventas) únicamente**. Es parte de un rollout **coordinado de flota** a Reflex 0.9.8 (SHOP + FOOD + LIFE), gestionado en 3 sesiones paralelas.
 **Documentos relacionados:**
@@ -549,6 +549,28 @@ FASE 1 (snapshot+tests) → FASE 2 (rama) → FASE 3 (upgrade+freeze) → FASE 4
 ```
 
 Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificación documental).
+
+---
+
+## 🔜 Pendientes para la próxima sesión (corte 2026-08-10)
+
+> **Estado global:** SHOP ✅ y FOOD ✅ en producción 0.9.8. LIFE **sigue en desarrollo local** (decisión de producto: aún NO va a producción). No hay nada que desplegar por ahora.
+
+### P1 — LIFE: NO desplegar (decisión) — sigue en desarrollo local
+- **Decisión (2026-08-10):** LIFE se mantiene en desarrollo local; **no se sube a producción todavía**. No tiene sentido reintentar el deploy ni cargar secrets de deploy hasta que producto decida lanzarlo.
+- **Código en 0.9.8 igualmente:** LIFE @ `f66278f`, CI verde, **100 tests**, smoke runtime 4/4, content-glob fix mergeado (PR #7). Queda **listo** para cuando se decida lanzar.
+- **Cuando se decida desplegar (futuro):** cargar en el repo de LIFE (`TreborOscorima/Gestion-de-Clinica`) los Secrets → Settings → Secrets and variables → Actions: `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_PRIVATE_KEY`, `DEPLOY_APP_DIR` (+ opcional `DEPLOY_SSH_PORT`), provisionar el server (`.env` con `MYSQL_PASSWORD`/`AUTH_SECRET_KEY`) y disparar `deploy-prod.yml`. **No aplica ahora.**
+
+### P2 — FOOD: confirmar prod sano (su sesión)
+- FOOD pusheó y deployó (@f66278f de su repo). Su sesión dejó pendiente **recrear el volumen `food_web` en su EC2** para frontend fresco y el smoke post-deploy. Confirmar `https://food.tuwayki.app/api/ping` + carta con emojis + login dueño.
+
+### P3 — Deuda técnica (post-rollout, no urgente) — ver sección "Deuda técnica"
+- **DT-1:** unificar plugin Tailwind → v4 (SHOP usa v3; FOOD/LIFE v4). Iniciativa aparte con **E2E visual completo**.
+- **DT-2:** drift de SHA de `tuwayki-core` (SHOP `@ef852f2` vs FOOD `@64850c8`; LIFE sin `_vendor`). Re-pinnear coordinado.
+
+### P4 — Menores
+- Limpieza: `docs/requirements_backup_pre_098.txt` y `docs/requirements_pre_098.txt` son backups untracked (redundantes con git history en `cef73ab`) → borrar o `.gitignore`.
+- Conector MCP de Reflex quedó **pendiente de autorizar** (no afectó nada). Si se quiere usar, autorizar desde sesión interactiva con `/mcp`.
 
 ---
 
