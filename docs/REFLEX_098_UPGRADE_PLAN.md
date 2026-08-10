@@ -388,12 +388,21 @@ git show --stat HEAD | Select-String "tuwayki"
 
 **Duración:** ~15-25 min · **Prerequisito:** CI verde.
 
+> ### ⚠️ CRÍTICO EN ESTE DEPLOY (bump de Reflex) — recrear volúmenes de frontend
+> SHOP monta 3 volúmenes named de frontend: `reflex_web_landing`, `reflex_web_sys`, `reflex_web_admin` (→ `/app/.web`). Al hacer `build` + `up -d`, Docker **reutiliza el volumen viejo** y puede servir el **frontend 0.9.4 cacheado** aunque la imagen sea 0.9.8. El entrypoint corre `reflex init` (borra `.web`), pero en un bump de versión conviene **recrear los volúmenes** como garantía (lo aprendimos en FOOD con `food_web`).
+> **Recrear SOLO los `reflex_web_*` — nunca los de DB.**
+
 ```bash
 ssh <usuario>@<ip-prueba>
 cd /ruta/al/proyecto
 
 git log --oneline -3
 git pull origin main
+
+docker compose down
+# recrear SOLO los volúmenes de frontend (NO toca MySQL) → fuerza frontend 0.9.8 fresco
+docker volume ls --format '{{.Name}}' | grep 'reflex_web_' | xargs -r docker volume rm
+
 docker compose build          # reinstala requirements.txt (Reflex 0.9.8) + reconstruye Vite
 docker compose up -d
 docker compose ps             # todos "Up (healthy)" (esperar hasta ~5 min primer arranque)
@@ -407,6 +416,7 @@ Smoke + manual:
 bash scripts/smoke_deploy.sh https://<dominio-prueba>   # 0 FAIL
 ```
 
+- [ ] 9.0 **Recrear volúmenes `reflex_web_*`** (frontend fresco 0.9.8; NO tocar DB)
 - [ ] 9.1 git pull en SVR prueba
 - [ ] 9.2 docker compose build OK (3 imágenes)
 - [ ] 9.3 docker compose up -d
@@ -433,6 +443,11 @@ git log --oneline origin/docker-deploy-prod -3
 ssh <usuario>@<ip-prod>
 cd /ruta/al/proyecto
 git pull origin main
+
+docker compose down
+# CRÍTICO (bump Reflex): recrear SOLO los volúmenes de frontend, NO los de DB
+docker volume ls --format '{{.Name}}' | grep 'reflex_web_' | xargs -r docker volume rm
+
 docker compose build
 docker compose up -d
 docker compose ps
@@ -447,6 +462,7 @@ curl -sf https://admin.tuwayki.app/api/health
 bash scripts/smoke_deploy.sh https://sys.tuwayki.app
 ```
 
+- [ ] 10.0 **Recrear volúmenes `reflex_web_*`** (frontend fresco 0.9.8; NO tocar DB)
 - [ ] 10.1 git pull en prod
 - [ ] 10.2 docker compose build
 - [ ] 10.3 docker compose up -d → healthy
@@ -570,6 +586,13 @@ Resultado FASE 1-5:
 Notas:
   - ROLLOUT DE FLOTA en 3 sesiones paralelas. Orden: core → FOOD → LIFE → SHOP → deploy.
     Plan maestro en Sistema-para-Food/PLAN_ACTUALIZACION_REFLEX.md
+  - ESTADO FLOTA (2026-08-10):
+    * FOOD ✅ MERGEADO + PUSHEADO a main y docker-deploy-prod (@f9bb1be) → deploy EC2 disparado.
+      Verificó ruta de dinero (cobro real vs MySQL) + 65 tests + 18 pantallas. Su sesión incluyó
+      el fix de content-glob (f9bb1be). PENDIENTE en su EC2: recrear volumen food_web (frontend fresco).
+    * LIFE ⏳ fix content-glob committeado local (@9b80fbf), healthy en 3004. Falta su merge+push+deploy (su sesión).
+    * SHOP ⏳ listo en rama chore/reflex-0.9.8; DEBE deployar ÚLTIMO (tras LIFE, por Owner Panel).
+      OJO deploy SHOP: recrear los 3 volúmenes reflex_web_* (ver FASE 9/10) — mismo issue que food_web.
   - VERIFICADO: TailwindV3Plugin existe en 0.9.8 sin deprecación (riesgo #1 descartado)
   - VERIFICADO: único breaking 0.9.4→0.9.8 = REFLEX_USE_TURBOPACK (no usado) → cero impacto API
   - VERIFICADO: SHOP tiene 0 usos del método .foreach deprecado (nada que migrar)
