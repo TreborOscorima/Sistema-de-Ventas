@@ -89,7 +89,7 @@ def client_selector() -> rx.Component:
                     rx.el.button(
                         rx.icon("plus", class_name="h-4 w-4"),
                         on_click=State.open_modal_from_pos,
-                        class_name="h-10 w-10 flex items-center justify-center rounded-lg border text-indigo-600 hover:bg-indigo-50",
+                        class_name="h-10 w-10 flex items-center justify-center rounded-lg border border-slate-200 text-indigo-600 hover:bg-indigo-50",
                         title="Nuevo cliente",
                         aria_label="Nuevo cliente",
                     ),
@@ -121,7 +121,7 @@ def client_selector() -> rx.Component:
                             ),
                         ),
                         spacing="1",
-                        class_name="w-full rounded-lg border bg-white shadow-sm p-1",
+                        class_name="w-full rounded-lg border border-slate-200 bg-white shadow-sm p-1",
                     ),
                     rx.fragment(),
                 ),
@@ -129,7 +129,7 @@ def client_selector() -> rx.Component:
                 class_name="w-full",
             ),
         ),
-        class_name="w-full p-2.5 bg-white rounded-xl border shadow-sm",
+        class_name="w-full p-2.5 bg-white rounded-xl border border-slate-200 shadow-sm",
     )
 
 
@@ -153,7 +153,7 @@ def quick_add_bar() -> rx.Component:
                             type="text",
                             auto_complete="off",
                         ),
-                        class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
+                        class_name="flex items-center gap-1 px-3 py-2 border border-slate-200 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                     ),
                     on_submit=State.handle_barcode_form_submit,
                     reset_on_submit=True,
@@ -184,7 +184,7 @@ def quick_add_bar() -> rx.Component:
                         ),
                         debounce_timeout=150,
                     ),
-                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
+                    class_name="flex items-center gap-1 px-3 py-2 border border-slate-200 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
                 rx.cond(
                     State.autocomplete_results.length() > 0,
@@ -214,7 +214,7 @@ def quick_add_bar() -> rx.Component:
                             ),
                         ),
                         custom_attrs={"data-autocomplete-dropdown": "1"},
-                        class_name="absolute z-20 left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto",
+                        class_name="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto",
                     ),
                     rx.fragment(),
                 ),
@@ -289,7 +289,7 @@ def quick_add_bar() -> rx.Component:
                             rx.cond(
                                 State.promotion_applied,
                                 "flex items-center gap-1 px-3 py-2 border border-emerald-300 rounded-lg bg-emerald-50/50 focus-within:ring-2 focus-within:ring-emerald-500",
-                                "flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                                "flex items-center gap-1 px-3 py-2 border border-slate-200 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                             ),
                         ),
                     ),
@@ -338,7 +338,7 @@ def quick_add_bar() -> rx.Component:
             class_name="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1 px-1",
         ),
         custom_attrs={"data-quick-add-bar": "1"},
-        class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b",
+        class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b border-slate-200",
     )
 
 
@@ -363,7 +363,7 @@ def products_table(embedded: bool = False) -> rx.Component:
                 on_click=State.clear_sale_items,
                 class_name="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors",
             ),
-            class_name="flex items-center justify-between p-2.5 bg-white border-b",
+            class_name="flex items-center justify-between p-2.5 bg-white border-b border-slate-200",
         ),
         # Contenido
         rx.el.div(
@@ -428,7 +428,7 @@ def products_table(embedded: bool = False) -> rx.Component:
         return content
     return rx.el.div(
         content,
-        class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
+        class_name="flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 
 
@@ -587,5 +587,5 @@ def sale_products_card() -> rx.Component:
         ),
         # lg:flex-1 solo en desktop (altura fija). En mobile flex-1 comprime la card
         # a min-h y deja ~40px para items — el layout scrollea, no necesita flex-grow.
-        class_name="flex flex-col bg-white rounded-xl border shadow-sm lg:flex-1",
+        class_name="flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm lg:flex-1",
     )

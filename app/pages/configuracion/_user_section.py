@@ -432,7 +432,7 @@ def _user_table_row(user: rx.Var[dict]) -> rx.Component:
         class_name="flex justify-center gap-2",
       )
     ),
-    class_name="border-b",
+    class_name="border-b border-slate-200",
     key=user["username"],
   )
 

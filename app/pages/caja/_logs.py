@@ -164,7 +164,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-3 px-4 text-center",
     ),
-    class_name="border-b hover:bg-slate-50 transition-colors",
+    class_name="border-b border-slate-200 hover:bg-slate-50 transition-colors",
   )
 
 

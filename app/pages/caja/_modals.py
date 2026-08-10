@@ -66,7 +66,7 @@ def close_cashbox_modal() -> rx.Component:
                 State.cashbox_close_opening_amount_display,
                 class_name="py-2 px-3 text-right text-sm font-semibold",
               ),
-              class_name="border-b",
+              class_name="border-b border-slate-200",
             ),
             rx.el.tr(
               rx.el.td("Ingresos reales", class_name="py-2 px-3 text-left text-sm"),
@@ -74,7 +74,7 @@ def close_cashbox_modal() -> rx.Component:
                 State.cashbox_close_income_total_display,
                 class_name="py-2 px-3 text-right text-sm font-semibold",
               ),
-              class_name="border-b",
+              class_name="border-b border-slate-200",
             ),
             rx.el.tr(
               rx.el.td("Devoluciones y egresos", class_name="py-2 px-3 text-left text-sm"),
@@ -82,7 +82,7 @@ def close_cashbox_modal() -> rx.Component:
                 State.cashbox_close_expense_total_display,
                 class_name="py-2 px-3 text-right text-sm font-semibold",
               ),
-              class_name="border-b",
+              class_name="border-b border-slate-200",
             ),
             rx.el.tr(
               rx.el.td(
@@ -96,7 +96,7 @@ def close_cashbox_modal() -> rx.Component:
               class_name="border-t border-slate-200 bg-slate-50",
             ),
           ),
-          class_name="min-w-full text-sm border rounded-lg",
+          class_name="min-w-full text-sm border border-slate-200 rounded-lg",
         ),
         class_name="overflow-x-auto mb-6",
       ),
@@ -144,7 +144,7 @@ def close_cashbox_modal() -> rx.Component:
                   item["net_total"],
                   class_name="py-2 px-3 text-right text-sm font-semibold text-slate-900",
                 ),
-                class_name="border-b",
+                class_name="border-b border-slate-200",
               ),
             ),
             rx.el.tr(
@@ -178,7 +178,7 @@ def close_cashbox_modal() -> rx.Component:
               class_name="border-t border-slate-200 bg-slate-50",
             )
           ),
-          class_name="min-w-full text-sm border rounded-lg",
+          class_name="min-w-full text-sm border border-slate-200 rounded-lg",
         ),
         class_name="overflow-x-auto mb-6",
       ),
@@ -220,13 +220,13 @@ def close_cashbox_modal() -> rx.Component:
                     sale["total"],
                     class_name="py-2 px-3 text-right text-sm font-semibold",
                   ),
-                  class_name="border-b",
+                  class_name="border-b border-slate-200",
                 ),
               )
             ),
             class_name="min-w-full text-sm",
           ),
-          class_name="max-h-64 overflow-y-auto overflow-x-auto border rounded-lg",
+          class_name="max-h-64 overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg",
         ),
         class_name="mb-6",
       ),
@@ -273,13 +273,13 @@ def close_cashbox_modal() -> rx.Component:
                       ),
                       class_name="py-2 px-3 text-right text-sm",
                     ),
-                    class_name="border-b",
+                    class_name="border-b border-slate-200",
                   ),
                 )
               ),
               class_name="min-w-full text-sm",
             ),
-            class_name="max-h-48 overflow-y-auto overflow-x-auto border rounded-lg",
+            class_name="max-h-48 overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg",
           ),
           class_name="mb-6",
         ),
@@ -340,13 +340,13 @@ def close_cashbox_modal() -> rx.Component:
                     row["subtotal"],
                     class_name="py-1.5 px-3 text-right text-sm font-mono",
                   ),
-                  class_name="border-b",
+                  class_name="border-b border-slate-200",
                 ),
               ),
             ),
             class_name="min-w-full text-sm",
           ),
-          class_name="max-h-56 overflow-y-auto overflow-x-auto border rounded-lg",
+          class_name="max-h-56 overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg",
         ),
         # Resultado del arqueo
         rx.el.div(
@@ -358,7 +358,7 @@ def close_cashbox_modal() -> rx.Component:
                   State.cashbox_close_counted_total_display,
                   class_name="py-2 px-3 text-right text-sm font-bold",
                 ),
-                class_name="border-b bg-slate-50",
+                class_name="border-b border-slate-200 bg-slate-50",
               ),
               rx.el.tr(
                 rx.el.td("Saldo esperado", class_name="py-2 px-3 text-left text-sm"),
@@ -366,7 +366,7 @@ def close_cashbox_modal() -> rx.Component:
                   State.cashbox_close_expected_total_display,
                   class_name="py-2 px-3 text-right text-sm font-semibold",
                 ),
-                class_name="border-b",
+                class_name="border-b border-slate-200",
               ),
               rx.el.tr(
                 rx.el.td(
@@ -384,7 +384,7 @@ def close_cashbox_modal() -> rx.Component:
                 class_name="border-t-2 border-slate-300",
               ),
             ),
-            class_name="w-full text-sm border rounded-lg",
+            class_name="w-full text-sm border border-slate-200 rounded-lg",
           ),
           class_name="mt-3",
         ),

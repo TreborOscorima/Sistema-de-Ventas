@@ -120,7 +120,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-3 px-4 text-center",
     ),
-    class_name="border-b hover:bg-slate-50 transition-colors",
+    class_name="border-b border-slate-200 hover:bg-slate-50 transition-colors",
   )
 
 
@@ -362,7 +362,7 @@ def _sale_row(sale: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-2 px-3",
     ),
-    class_name="border-b hover:bg-slate-50 transition-colors",
+    class_name="border-b border-slate-200 hover:bg-slate-50 transition-colors",
   )
 
 

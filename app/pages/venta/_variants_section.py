@@ -60,7 +60,7 @@ def _variant_picker_cell(cell: rx.Var[dict]) -> rx.Component:
         rx.el.div(
             rx.el.span("—", class_name="text-slate-300"),
             class_name=(
-                "h-16 flex items-center justify-center border border-dashed "
+                "h-16 flex items-center justify-center border border-slate-200 border-dashed "
                 "border-slate-200 rounded-lg bg-slate-50/50"
             ),
         ),

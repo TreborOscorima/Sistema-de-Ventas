@@ -498,7 +498,7 @@ def _new_quotation_modal() -> rx.Component:
                         ),
                         default_value=State.quot_client_id,
                         on_change=State.set_quot_client,
-                        class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                        class_name=SELECT_STYLES.get("default", "border border-slate-200 rounded px-3 py-2 text-sm w-full"),
                     ),
                     class_name="flex-1",
                 ),
@@ -700,7 +700,7 @@ def presupuestos_page() -> rx.Component:
                     rx.el.option("Procesados", value="converted"),
                     default_value=State.quotations_filter_status,
                     on_change=State.set_quotations_filter_status,
-                    class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm"),
+                    class_name=SELECT_STYLES.get("default", "border border-slate-200 rounded px-3 py-2 text-sm"),
                 ),
                 rx.el.button(
                     rx.icon("plus", class_name="h-4 w-4"),

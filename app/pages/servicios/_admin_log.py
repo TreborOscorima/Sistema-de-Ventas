@@ -105,7 +105,7 @@ def admin_log_row(entry: rx.Var[dict]) -> rx.Component:
       class_name="py-3 px-4",
     ),
     rx.el.td(entry["notes"], class_name="py-3 px-4 text-sm text-slate-600 hidden md:table-cell"),
-    class_name="border-b",
+    class_name="border-b border-slate-200",
   )
 
 

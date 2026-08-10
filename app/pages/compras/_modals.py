@@ -324,7 +324,7 @@ def purchase_edit_modal() -> rx.Component:
           class_name="w-full text-left p-2 hover:bg-slate-100",
         ),
       ),
-      class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
+      class_name="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto",
     ),
     rx.fragment(),
   )

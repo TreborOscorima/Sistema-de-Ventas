@@ -126,7 +126,7 @@ def _price_list_form_modal() -> rx.Component:
                         rx.el.option("USD — Dólar", value="USD"),
                         default_value=State.pl_currency_code,
                         on_change=State.set_pl_currency_code,
-                        class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                        class_name=SELECT_STYLES.get("default", "border border-slate-200 rounded px-3 py-2 text-sm w-full"),
                         key=State.pl_form_key.to_string(),
                     ),
                 ),

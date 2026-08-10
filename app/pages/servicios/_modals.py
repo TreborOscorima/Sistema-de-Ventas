@@ -42,7 +42,7 @@ def payment_method_selector_compact() -> rx.Component:
           class_name=rx.cond(
             State.payment_method == method["name"],
             "flex items-center gap-1 px-2 py-1.5 rounded-md bg-indigo-600 text-white text-xs",
-            "flex items-center gap-1 px-2 py-1.5 rounded-md border bg-white text-slate-700 hover:bg-slate-50 text-xs",
+            "flex items-center gap-1 px-2 py-1.5 rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs",
           ),
         ),
       ),

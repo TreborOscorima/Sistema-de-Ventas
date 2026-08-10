@@ -248,7 +248,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-3 px-4 text-right hidden md:table-cell",
     ),
-    class_name="border-b",
+    class_name="border-b border-slate-200",
   )
 
 

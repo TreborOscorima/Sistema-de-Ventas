@@ -230,7 +230,7 @@ def _plan_card(
     is_enterprise = tone == "enterprise"
     is_professional = tone == "professional"
 
-    card_cls = "rounded-2xl border bg-white p-7 transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
+    card_cls = "rounded-2xl border border-slate-200 bg-white p-7 transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
     t_cls = "mt-3 text-lg font-bold text-slate-900"
     s_cls = "mt-2 text-sm text-slate-600"
     p_cls = "text-sm text-slate-700"

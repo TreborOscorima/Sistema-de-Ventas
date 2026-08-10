@@ -85,7 +85,7 @@ def sport_selector() -> rx.Component:
           class_name=rx.cond(
             State.field_rental_sport == "futbol",
             "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white min-h-[140px] sm:min-h-[160px] transition-transform duration-300",
-            "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
+            "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-slate-200 border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
           ),
         ),
         on_click=lambda: State.set_field_rental_sport("futbol"),
@@ -134,7 +134,7 @@ def sport_selector() -> rx.Component:
           class_name=rx.cond(
             State.field_rental_sport == "voley",
             "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white min-h-[140px] sm:min-h-[160px] transition-transform duration-300",
-            "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
+            "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-slate-200 border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
           ),
         ),
         on_click=lambda: State.set_field_rental_sport("voley"),
@@ -202,7 +202,7 @@ def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
       rx.cond(
         slot["selected"],
         "w-full text-left rounded-lg bg-indigo-600 text-white px-3 py-2 shadow relative",
-        "w-full text-left rounded-lg border px-3 py-2 hover:bg-slate-50 relative",
+        "w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 relative",
       ),
     ),
     disabled=slot["reserved"],
