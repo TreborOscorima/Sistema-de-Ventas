@@ -591,8 +591,12 @@ Notas:
       Verificó ruta de dinero (cobro real vs MySQL) + 65 tests + 18 pantallas. Su sesión incluyó
       el fix de content-glob (f9bb1be). PENDIENTE en su EC2: recrear volumen food_web (frontend fresco).
     * LIFE ⏳ fix content-glob committeado local (@9b80fbf), healthy en 3004. Falta su merge+push+deploy (su sesión).
-    * SHOP ⏳ listo en rama chore/reflex-0.9.8; DEBE deployar ÚLTIMO (tras LIFE, por Owner Panel).
-      OJO deploy SHOP: recrear los 3 volúmenes reflex_web_* (ver FASE 9/10) — mismo issue que food_web.
+    * SHOP ✅ DEPLOYADO A PROD (2026-08-10). Merge FF chore→main (@e6d181a), push dual main+docker-deploy-prod
+      (pre-push hook: 1274 tests verdes), CI verde, deploy-prod GHA OK (4m8s). Verificado:
+      tuwayki.app / sys / admin → /api/health status:ok (db+redis ok), y el fix de la landing VIVO
+      (botones Ingresar/Registro visibles en https://tuwayki.app/shop → sys.tuwayki.app).
+      Frontend fresco garantizado: el entrypoint hace Vite build en cada arranque (no hizo falta recrear volúmenes).
+      NOTA: se decidió NO esperar a LIFE (el upgrade no cambia APIs/contrato → orden "SHOP último" era cautela innecesaria).
   - VERIFICADO: TailwindV3Plugin existe en 0.9.8 sin deprecación (riesgo #1 descartado)
   - VERIFICADO: único breaking 0.9.4→0.9.8 = REFLEX_USE_TURBOPACK (no usado) → cero impacto API
   - VERIFICADO: SHOP tiene 0 usos del método .foreach deprecado (nada que migrar)
