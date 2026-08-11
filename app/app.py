@@ -431,7 +431,9 @@ _pwa_components: list = (
         rx.el.link(rel="apple-touch-icon", href="/icon-192.png"),
         # SW + install banner solo en la superficie app (sys.tuwayki.app).
         *(
-            [rx.script(src="/js/twk-pwa.js", defer=True)]
+            # rx.el.script (elemento <script> crudo) con src: rx.script(src=...)
+            # en head_components descarta el src en Reflex 0.9.8 y no carga nada.
+            [rx.el.script(src="/js/twk-pwa.js", defer=True)]
             if APP_SURFACE == "app"
             else []
         ),
@@ -467,9 +469,11 @@ app = rx.App(
         # PWA — manifest + banner (condicional por superficie).
         *_pwa_components,
         # Scripts globales (defer → no bloquean render). Contenido idempotente.
-        rx.script(src="/js/twk-sidebar-scroll.js", defer=True),
-        rx.script(src="/js/twk-keyboard-shortcuts.js", defer=True),
-        rx.script(src="/js/twk-rail-flyout.js", defer=True),
+        # rx.el.script (no rx.script): en Reflex 0.9.8, rx.script(src=...) dentro
+        # de head_components descarta el src y renderiza un <script> vacío.
+        rx.el.script(src="/js/twk-sidebar-scroll.js", defer=True),
+        rx.el.script(src="/js/twk-keyboard-shortcuts.js", defer=True),
+        rx.el.script(src="/js/twk-rail-flyout.js", defer=True),
     ],
 )
 
