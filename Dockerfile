@@ -13,19 +13,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Build tools + headers MySQL SOLO para compilar wheels (no llegan a runtime).
+# git: requerido por pip para instalar tuwayki-core desde git+https (requirements.txt).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    git \
     default-libmysqlclient-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY requirements.txt .
-COPY _vendor/ _vendor/
-# tuwayki-core se instala desde vendor local (paquete privado sin PyPI).
-# El resto de deps pinneadas van desde requirements.txt.
-RUN pip install --no-cache-dir --prefix=/install /build/_vendor/tuwayki-core && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
+# tuwayki-core (público en GitHub) va pinneado por SHA dentro de requirements.txt
+# (fuente de verdad única). Ya no se usa _vendor/ ni un install separado.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # =============================================================================
@@ -62,9 +62,6 @@ RUN groupadd --system --gid 1000 app \
 
 # Copiar codigo de la aplicacion con ownership correcto.
 COPY --chown=app:app . .
-# _vendor/ se usó en el builder para pip install; en runtime el paquete ya está
-# en site-packages. Limpiar fuente para reducir imagen (~5-10 MB menos).
-RUN rm -rf /app/_vendor
 
 # Script de entrada:
 # - espera MySQL/Redis (fail-fast)

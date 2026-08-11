@@ -25,7 +25,8 @@ dev.err
 e2e_screenshots/
 testing_session_log.md
 
-# Vendor local para builds Docker (tuwayki-core se instala desde _vendor/)
+# _vendor/ ya no se usa para builds (tuwayki-core se instala vía requirements.txt,
+# GitHub SHA). Se mantiene ignorado por si se clona el core localmente para dev editable.
 _vendor/
 
 # Material de marketing / documentos no versionados
