@@ -1,7 +1,7 @@
 # TUWAYKISHOP — Sistema Integral de Gestion (ERP/POS)
 
 **Version:** 4.3 (Rebrand TUWAYKISHOP + Impresion Nativa + Core Multi-tenant + Defensa del Consumidor)
-**Tecnologia:** Python 3.13 / Reflex 0.9.4 / MySQL 8.0 / Docker
+**Tecnologia:** Python 3.13 / Reflex 0.9.8 / Tailwind CSS v4 / MySQL 8.0 / Docker
 **Autor:** Trebor Oscorima
 
 ---
@@ -41,6 +41,13 @@ La version **v4.3** aplica el rebrand a **TUWAYKISHOP** en todas las superficies
 * **Cumplimiento Legal (AR):** Leyenda de Defensa del Consumidor configurable de forma global y por sucursal, con presets por provincia.
 * **Nucleo Compartido:** Aislamiento multi-tenant y RBAC base en el paquete **tuwayki-core**, reutilizado por los productos de la marca.
 * **Despliegue Docker:** Arquitectura multi-stage de 5 contenedores con Nginx Proxy Manager.
+
+### Actualizacion de plataforma (2026-08) — Reflex 0.9.8 + Tailwind v4 + core unificado
+
+* **Reflex 0.9.4 → 0.9.8:** fixes de Windows (stylesheet backslash, hydration MIME) y cierre correcto de conexiones Redis. Toda la flota (SHOP/FOOD/LIFE) queda alineada en **0.9.8**.
+* **Tailwind v3 → v4 (`TailwindV4Plugin`):** migracion completa de estilos. Regresion clave de v4: la utilidad `border` **sin color** pasa de `gray-200` a `currentColor` (negro) — como la capa `__reflex_base` de Reflex hace inviable un shim global (depende del orden de carga), el fix fue **explicito** con `border-slate-200` en ~110 sitios/26 archivos. QA visual E2E en Docker (18 rutas + modales, 0 regresiones). `theme.extend` (Inter/Space Grotesk, motion-safe) y Radix preservados. Content-glob del plugin extendido a `./app_components/**` y `./components/**`.
+* **Mecanismo de `tuwayki-core` unificado:** el core (repo **publico** en GitHub) se instala **pinneado por SHA via `requirements.txt`** (`tuwayki-core @ git+https://…@<SHA>`), sin `_vendor`. Se agrego `git` al builder del `Dockerfile` (lo necesita `pip install` de `git+https`) y se quito `ensure_vendor()` de `scripts/deploy-prod.sh`. SHA alineado en los 3 sistemas; para bumpear el core: editar el SHA en `requirements.txt` + re-test + deploy.
+* **1274 tests** — suite estable tras el upgrade y la migracion de estilos.
 
 ### Novedades v4.3 (2026)
 
@@ -123,15 +130,15 @@ La version **v4.3** aplica el rebrand a **TUWAYKISHOP** en todas las superficies
 | Capa | Tecnologia |
 |:-----|:-----------|
 | **Frontend** | React (compilado por Reflex desde Python) |
-| **Backend** | Python 3.13 + Reflex 0.9.4 |
-| **Nucleo Multi-tenant** | `tuwayki-core` (paquete compartido: contexto de tenant, RBAC base) |
+| **Backend** | Python 3.13 + Reflex 0.9.8 |
+| **Nucleo Multi-tenant** | `tuwayki-core` (paquete **publico**, pinneado por SHA via `requirements.txt`: contexto de tenant, RBAC base) |
 | **Base de Datos** | MySQL 8.0 + SQLModel/SQLAlchemy 2.0 |
 | **Migraciones** | Alembic 1.18 |
 | **Cache / Rate Limiting** | Redis 7 |
 | **HTTP Client** | httpx (async) para APIs fiscales |
 | **Criptografia** | cryptography (Fernet + PBKDF2) |
 | **Autenticacion** | JWT (PyJWT) con refresh tokens + bcrypt |
-| **Estilos** | Tailwind CSS v3 + Radix Theme |
+| **Estilos** | Tailwind CSS v4 (`TailwindV4Plugin`) + Radix Theme |
 | **Reportes** | ReportLab (PDF) + OpenPyXL (Excel) |
 | **Testing** | pytest + pytest-asyncio + pytest-mock |
 | **Despliegue** | Docker Compose multi-stage + Nginx Proxy Manager |
