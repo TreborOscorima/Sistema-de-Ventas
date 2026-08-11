@@ -14,7 +14,6 @@
 # Variables de entorno opcionales:
 #   APP_DIR              Directorio del proyecto (default: padre de scripts/)
 #   BRANCH               Rama a desplegar (default: docker-deploy-prod)
-#   TUWAYKI_CORE_SHA     Commit fijo de tuwayki-core (sync con .github/workflows/tests.yml)
 #   HEALTH_WAIT_MAX      Iteraciones de espera × 15s (default: 80 → 20 min)
 #   BACKUP_KEEP          Backups .sql.gz a conservar (default: 5)
 #
@@ -39,8 +38,6 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BRANCH="${BRANCH:-docker-deploy-prod}"
-TUWAYKI_CORE_SHA="${TUWAYKI_CORE_SHA:-ef852f2329fab5a77403101beb71710295d97187}"
-TUWAYKI_CORE_REPO="${TUWAYKI_CORE_REPO:-https://github.com/TreborOscorima/tuwayki-core.git}"
 HEALTH_WAIT_MAX="${HEALTH_WAIT_MAX:-80}"
 BACKUP_KEEP="${BACKUP_KEEP:-5}"
 NPM_NETWORK="${NPM_NETWORK:-nginx-proxy-manager_default}"
@@ -66,7 +63,7 @@ done
 
 cd "$APP_DIR"
 info "Deploy Docker prod en: $APP_DIR"
-info "Branch: $BRANCH | tuwayki-core: ${TUWAYKI_CORE_SHA:0:12}"
+info "Branch: $BRANCH"
 
 # ─── Escalado horizontal opt-in (P3 §3.1) ─────────────────────────────────────
 # SCALE_SYS=1 → incluye docker-compose.scale.yml (2ª réplica tuwayki_sys_2) en
@@ -213,25 +210,10 @@ fi
 git reset --hard "origin/$BRANCH"
 ok "Commit: $(git log --oneline -1)"
 
-# ─── 3. Vendor tuwayki-core (no está en git) ──────────────────────────────────
-VENDOR_DIR="$APP_DIR/_vendor/tuwayki-core"
-ensure_vendor() {
-    if [[ -d "$VENDOR_DIR/.git" ]]; then
-        info "Actualizando _vendor/tuwayki-core..."
-        git -C "$VENDOR_DIR" fetch origin --tags --quiet
-        git -C "$VENDOR_DIR" checkout --detach "$TUWAYKI_CORE_SHA" --quiet
-    else
-        info "Clonando tuwayki-core en _vendor/..."
-        mkdir -p "$APP_DIR/_vendor"
-        git clone "$TUWAYKI_CORE_REPO" "$VENDOR_DIR"
-        git -C "$VENDOR_DIR" checkout --detach "$TUWAYKI_CORE_SHA" --quiet
-    fi
-    [[ -f "$VENDOR_DIR/pyproject.toml" ]] || fail "_vendor/tuwayki-core incompleto (falta pyproject.toml)"
-}
-ensure_vendor
-ok "tuwayki-core @ ${TUWAYKI_CORE_SHA:0:12}"
+# tuwayki-core ya no se vendorea: se instala vía requirements.txt (GitHub SHA)
+# durante el `docker compose build`. Ver DT-4 en docs/REFLEX_098_UPGRADE_PLAN.md.
 
-# ─── 4. Build + deploy ────────────────────────────────────────────────────────
+# ─── 3. Build + deploy ────────────────────────────────────────────────────────
 SERVICES=(tuwayki_landing tuwayki_sys tuwayki_admin)
 # Con escalado activo, sys_2 también se buildea y se espera healthy.
 if [ "$SCALE_SYS" = "1" ]; then

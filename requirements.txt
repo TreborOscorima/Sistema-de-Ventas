@@ -1,3 +1,7 @@
+# Lib compartida de la flota (pública en GitHub), pinneada por SHA. Fuente de
+# verdad única del core: bumpear este SHA. Local: `pip install -e ../tuwayki-core`
+# tras instalar deps para trabajar el core en editable. Ver docs/REFLEX_098_UPGRADE_PLAN.md (DT-4).
+tuwayki-core @ git+https://github.com/TreborOscorima/tuwayki-core.git@ef852f2329fab5a77403101beb71710295d97187
 aiomysql==0.3.2
 alembic==1.18.4
 annotated-types==0.7.0

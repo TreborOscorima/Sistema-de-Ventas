@@ -42,15 +42,14 @@ jobs:
         with:
           python-version: "3.13"
 
-      # SHA fijo: garantiza que CI y local usan exactamente la misma versión.
-      # Para actualizar: cambiar el SHA al nuevo commit de tuwayki-core después de pushear.
-      - name: Install tuwayki-core
-        run: |
-          python -m pip install \
-            git+https://github.com/TreborOscorima/tuwayki-core.git@ef852f2329fab5a77403101beb71710295d97187
+      # tuwayki-core (público) se instala pinneado por SHA vía requirements.txt
+      # (incluido por requirements-dev.txt con `-r requirements.txt`). Fuente de
+      # verdad única del core: la línea git+ en requirements.txt.
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
 
-      # Falla rápido y con mensaje claro si se agrega una función en tuwayki-core local
-      # sin commitearla al repo público. Actualizar este listado al ampliar la API.
+      # Falla rápido y con mensaje claro si se agrega una función en tuwayki-core
+      # local sin commitearla al repo público. Actualizar este listado al ampliar la API.
       - name: Verificar API pública de tuwayki-core
         run: |
           python -c "
@@ -69,9 +68,6 @@ jobs:
           from tuwayki_core.utils.tax_presets import TaxRatePreset
           print('tuwayki-core API OK')
           "
-
-      - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt
 
       - name: Validate dependency graph
         run: python -m pip check
