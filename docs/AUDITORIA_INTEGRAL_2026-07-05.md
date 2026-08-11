@@ -2,6 +2,8 @@
 
 > **Fecha:** 2026-07-05 · **HEAD auditado:** `c530a7c` (rama `main`)
 > **Propósito de este documento:** ser el punto de entrada único para cualquier IA o desarrollador que deba continuar el proyecto. Contiene: mapa del sistema, veredicto por área (frontend, backend, seguridad, rendimiento, offline, facturación electrónica), hallazgos priorizados y guía operativa de continuidad.
+>
+> ⚠️ **Snapshot con fecha — cambios posteriores relevantes (ver `docs/REFLEX_098_UPGRADE_PLAN.md`):** desde esta auditoría la flota migró a **Reflex 0.9.8** y **Tailwind v4**, y `tuwayki-core` dejó de vendorearse: **ya NO se usa `_vendor/`; el core se instala desde GitHub pinneado por SHA vía `requirements.txt`** (público, mismo mecanismo en SHOP/FOOD/LIFE — DT-4). Las menciones a `_vendor/` más abajo son del estado de 2026-07-05.
 
 ---
 
@@ -15,7 +17,7 @@ TUWAYKIAPP es un **ERP/POS SaaS multi-tenant** construido 100% en Python con **R
 | `app` | sys.tuwayki.app | `tuwayki_sys` | El sistema de ventas (POS/ERP) para tenants |
 | `owner` | admin.tuwayki.app | `tuwayki_admin` | Backoffice de plataforma (gestión de empresas, billing, auditoría) |
 
-Existe un producto hermano **TUWAYKIFOOD** (restaurantes/restobares) en un **repo separado e independiente** que comparte el paquete privado `tuwayki-core` (vendorizado en `_vendor/tuwayki-core/`). Regla del proyecto: **cambios en un repo nunca afectan al otro; no duplicar código entre repos** — lo compartible va a `tuwayki-core`.
+Existe un producto hermano **TUWAYKIFOOD** (restaurantes/restobares) en un **repo separado e independiente** que comparte el paquete `tuwayki-core` (a 2026-07-05 vendorizado en `_vendor/`; **hoy se instala vía `requirements.txt` por GitHub SHA — DT-4**). Regla del proyecto: **cambios en un repo nunca afectan al otro; no duplicar código entre repos** — lo compartible va a `tuwayki-core`.
 
 **Veredicto general:** el sistema está en estado **maduro y production-ready** para su alcance actual. Tres rondas de auditoría previas (148+ hallazgos) fueron corregidas y cerradas; hay ~1.023 tests. Las áreas con mayor brecha real hoy son: (a) **operación offline** (arquitectónicamente no soportada, ver §7), (b) **endurecimiento del panel Owner** (sin MFA, cuenta única), y (c) **completar la certificación/homologación de facturación electrónica** en ambos países (el código está, falta el ciclo formal + representaciones impresas con QR).
 
@@ -36,8 +38,9 @@ Sistema-de-Ventas/
 │   ├── tasks/            # fiscal_retry_worker.py (reintentos automáticos de docs fiscales)
 │   ├── utils/            # Re-exports de tuwayki_core + helpers locales (db, tenant, crypto, rate_limit…)
 │   └── i18n/messages.py  # Textos (español latino neutro — regla del proyecto)
-├── _vendor/tuwayki-core/ # Paquete privado compartido con TUWAYKIFOOD: auth JWT, tenant isolation,
-│                         #   crypto Fernet, rate limit Redis, validators fiscales, exports, timezone
+│   # tuwayki-core (compartido: auth JWT, tenant isolation, crypto Fernet, rate limit
+│   # Redis, validators fiscales, exports, timezone). A 2026-07-05 en `_vendor/`;
+│   # hoy es dependencia de `requirements.txt` (GitHub SHA), sin `_vendor/` — DT-4.
 ├── alembic/              # Migraciones (auto-aplicadas al boot por la superficie landing)
 ├── assets/               # sw.js (service worker), manifest*.json, js/twk-*.js, css, imágenes webp
 ├── docker-compose.yml    # Stack prod: mysql + redis + 3 superficies detrás de Nginx Proxy Manager
@@ -228,7 +231,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 1. **Idioma UI:** español latinoamericano neutro. Sin voseo argentino (nada de "tenés/hacés").
 2. **Nunca `reflex run` para reiniciar en el flujo normal:** el entorno de referencia es Docker (`docker compose build && docker compose up -d`). Dos MySQL: Docker `:33306` ≠ local `:3306`.
 3. **Multi-tenant:** todo acceso a datos dentro de `tenant_context()`; `tenant_bypass()` solo para owner/jobs con justificación.
-4. **Ventas y TUWAYKIFOOD son repos independientes.** Código compartido → `tuwayki-core` (vendorizado en `_vendor/`).
+4. **Ventas y TUWAYKIFOOD son repos independientes.** Código compartido → `tuwayki-core` (hoy instalado vía `requirements.txt` por GitHub SHA; ya no vendorizado — DT-4).
 5. **Push dual:** los cambios se pushean a `main` y a la rama de deploy (`docker-deploy-prod`) según el flujo vigente.
 6. **Variables nuevas** van a `.env.example`; si son secretos/específicas de entorno, **comentadas** (el deploy auto-sinca las no comentadas al `.env` del servidor).
 
