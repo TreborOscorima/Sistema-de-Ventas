@@ -566,7 +566,7 @@ Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificaci
 
 ### P3 — Deuda técnica (post-rollout, no urgente) — ver sección "Deuda técnica"
 - **DT-1:** ✅ **HECHO, MERGEADO y DEPLOYADO A PROD (2026-08-10, PR #15, merge `06320b8`).** SHOP migrado a `TailwindV4Plugin`; QA visual E2E OK; verificado en `sys.tuwayki.app` (v4 live, 0 errores). Los 3 sistemas quedan en v4. Ver sección "Deuda técnica" para el detalle.
-- **DT-2:** drift de SHA de `tuwayki-core` (SHOP `@ef852f2` vs FOOD `@64850c8`; LIFE sin `_vendor`). Re-pinnear coordinado.
+- **DT-2:** ✅ **CERRADO (2026-08-10).** Solo FOOD estaba desalineado (`@64850c8`); bumpeado a `@ef852f2` (PR Food#4, 65 tests verdes) y deployado. Los 3 sistemas en `ef852f2`.
 
 ### P4 — Menores
 - Limpieza: `docs/requirements_backup_pre_098.txt` y `docs/requirements_pre_098.txt` son backups untracked (redundantes con git history en `cef73ab`) → borrar o `.gitignore`.
@@ -636,7 +636,7 @@ Notas:
 | # | Tema | Detalle | Decisión sugerida |
 |---|---|---|---|
 | DT-1 | ✅ **Unificar plugin de Tailwind → v4 (HECHO + DEPLOYADO A PROD, PR #15 merge `06320b8`, 2026-08-10)** | SHOP era el único en `TailwindV3Plugin` (FOOD/LIFE en v4). **Migrado a `TailwindV4Plugin`** en rama `chore/tailwind-v4-shop` (commit `fe6f069`, typography 0.5.19→0.5.20). `content`-glob + `theme.extend` (Inter/Grotesk, motion-safe) preservados. **Regresión de v4 corregida:** la utilidad `border` sin color pasa de gray-200 a `currentColor` (negro); se descartó el shim global (frágil por la capa `__reflex_base` de Reflex + orden de carga) y se aplicó fix **explícito** `border-slate-200` en **~110 sitios / 26 archivos**. **QA visual E2E** en Docker v4 (login real): 18/18 rutas + modal con **0 regresiones**, 0 errores de consola, 1274 tests verdes, fuentes/Radix intactos. Única excepción: `border-black` intencional en `/etiquetas` (preview imprimible). | ✅ **Cerrado**: mergeado (`06320b8`) y deployado a prod vía GHA `deploy-prod` el 2026-08-10; verificado en `sys.tuwayki.app` (v4 live, `border-slate-200` gris, Inter, 0 errores de consola). Los 3 sistemas quedan en Tailwind v4. |
-| DT-2 | **Drift de SHA de `tuwayki-core`** | SHOP CI `@ef852f2` vs FOOD `@64850c8`; LIFE sin `_vendor`. Pre-existente, higiene aparte. | Re-pinnear los 3 al mismo SHA canónico de forma coordinada, en su propia tarea. |
+| DT-2 | ✅ **Drift de SHA de `tuwayki-core` (CERRADO, 2026-08-10)** | Diagnóstico: SHOP (vendor+CI) y LIFE (requirements) ya en `ef852f2` (HEAD canónico); solo FOOD estaba en `64850c8` (3 commits atrás: tenant cache-safe, países, format_number). | ✅ **Cerrado**: FOOD bumpeado `64850c8`→`ef852f2` (PR Food#4 merge `a55dfa4`, 65 tests verdes) y deployado a prod (`food.tuwayki.app` ok). Los 3 en `ef852f2`. Pendiente menor aparte: `_vendor` muerto de FOOD (`1e1b482`) + unificar mecanismo (vendor vs GitHub). |
 | DT-3 | **content-glob `app_components`** | Regresión 0.9.x ya **corregida en los 3** (SHOP `67fe7ee` real; LIFE `9b80fbf` y FOOD `f9bb1be` como blindaje). Ver [Incidencias](#registro-de-incidencias) #6. | Cerrado. Solo queda que FOOD/LIFE incluyan su commit en el merge y no lo dupliquen. |
 
 ---
