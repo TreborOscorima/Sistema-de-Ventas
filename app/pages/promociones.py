@@ -282,7 +282,7 @@ def _delete_confirm_modal() -> rx.Component:
                         class_name="text-lg font-semibold text-slate-900 text-center",
                     ),
                     rx.el.p(
-                        "¿Estás seguro de que querés eliminar «",
+                        "¿Estás seguro de que deseas eliminar «",
                         rx.el.span(State.promo_delete_name, class_name="font-semibold"),
                         "»? Esta acción no se puede deshacer.",
                         class_name="text-sm text-slate-600 text-center mt-2",

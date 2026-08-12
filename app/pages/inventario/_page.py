@@ -139,7 +139,7 @@ def inventario_page() -> rx.Component:
               rx.fragment(),
               rx.el.button(
                 rx.icon("x", class_name="h-3 w-3"),
-                on_click=lambda category=category: State.remove_category(
+                on_click=lambda _, category=category: State.remove_category(
                   category
                 ),
                 title="Eliminar categoria",

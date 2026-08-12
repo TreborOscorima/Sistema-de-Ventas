@@ -91,6 +91,7 @@ class ClientesState(MixinState):
         "name": "",
         "sale_count": 0,
         "current_debt": 0.0,
+        "current_debt_raw": 0.0,
         "can_delete": False,
     }
 
@@ -126,7 +127,9 @@ class ClientesState(MixinState):
 
     @rx.var(cache=False)
     def client_delete_has_debt(self) -> bool:
-        return float(self.client_delete_target.get("current_debt", 0)) > 0
+        # Usa el monto numérico crudo, no el string display ("0,00" con coma
+        # rompe float() y envenena la sesión al re-evaluarse en cada delta).
+        return float(self.client_delete_target.get("current_debt_raw", 0) or 0) > 0
 
     @rx.var(cache=False)
     def client_delete_has_sales(self) -> bool:
@@ -506,6 +509,7 @@ class ClientesState(MixinState):
                 "name": client.name,
                 "sale_count": sale_count,
                 "current_debt": self._fmt_amount(current_debt),
+                "current_debt_raw": current_debt,
                 "can_delete": can_delete,
             }
         self.client_delete_modal_open = True
@@ -515,7 +519,7 @@ class ClientesState(MixinState):
         self.client_delete_modal_open = False
         self.client_delete_target = {
             "id": 0, "name": "", "sale_count": 0,
-            "current_debt": 0.0, "can_delete": False,
+            "current_debt": 0.0, "current_debt_raw": 0.0, "can_delete": False,
         }
 
     @rx.event
@@ -574,7 +578,7 @@ class ClientesState(MixinState):
         self.client_delete_modal_open = False
         self.client_delete_target = {
             "id": 0, "name": "", "sale_count": 0,
-            "current_debt": 0.0, "can_delete": False,
+            "current_debt": 0.0, "current_debt_raw": 0.0, "can_delete": False,
         }
         self.load_clients()
         return self.add_notification("Cliente eliminado.", "success")
