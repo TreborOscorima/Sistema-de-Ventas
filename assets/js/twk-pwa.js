@@ -187,3 +187,144 @@
     });
   }
 })();
+
+/**
+ * Auto-actualización de versión.
+ *
+ * Una pantalla del sistema se deja abierta horas o días y casi nunca se recarga,
+ * así que el JS viejo ya cargado en memoria sigue corriendo aunque el servidor ya
+ * tenga un build nuevo (tras un deploy, algunos equipos seguían mostrando la UI
+ * anterior). Ningún Service Worker puede recargar por sí solo una pestaña abierta.
+ * Acá el cliente compara cada minuto los bundles hasheados que Reflex (Vite) emite
+ * bajo /assets/*-<hash>.js|css contra los del build en curso; si cambian, hay
+ * versión nueva. Para NO interrumpir una tarea a medias no recargamos de golpe:
+ * mostramos un aviso con botón "Actualizar" y, además, aplicamos la recarga sola
+ * cuando la pestaña pasa a segundo plano (invisible para el usuario).
+ *
+ * Nota: los equipos que hoy están en una versión vieja (sin este código) todavía
+ * necesitan UNA recarga manual para recibir este auto-actualizador; de ahí en
+ * más, cada deploy futuro se aplica solo.
+ */
+(function () {
+  "use strict";
+
+  var CHECK_MS = 60000; // revisa cada 1 min
+  var baseline = null;  // firma del build que está corriendo
+  var pending = false;  // ya detectamos un build nuevo
+  var reloading = false;
+
+  function reloadNow() {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  }
+
+  // Firma del build = conjunto ordenado de bundles hasheados /assets/*.(js|css)
+  // que referencia el HTML. Los hashes cambian en cada build, así que dos firmas
+  // distintas = deploy nuevo.
+  function firmaDeHTML(html) {
+    var re = /["'](\/assets\/[^"']+\.(?:js|css))["']/g;
+    var set = {};
+    var m;
+    while ((m = re.exec(html))) {
+      set[m[1]] = true;
+    }
+    return Object.keys(set).sort().join("|");
+  }
+
+  function mostrarAviso() {
+    if (document.getElementById("twk-update-banner")) return;
+    var b = document.createElement("div");
+    b.id = "twk-update-banner";
+    b.setAttribute("role", "status");
+    b.style.cssText = [
+      "position:fixed",
+      "top:16px",
+      "left:50%",
+      "transform:translateX(-50%)",
+      "z-index:100000",
+      "background:#4f46e5",
+      "color:#fff",
+      "border-radius:12px",
+      "box-shadow:0 8px 32px rgba(0,0,0,.24)",
+      "padding:10px 12px 10px 16px",
+      "display:flex",
+      "align-items:center",
+      "gap:12px",
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+      "font-size:13px",
+      "font-weight:600",
+      "max-width:calc(100vw - 32px)",
+    ].join(";");
+    var txt = document.createElement("span");
+    txt.textContent = "Hay una versión nueva de TUWAYKISHOP.";
+    var btn = document.createElement("button");
+    btn.textContent = "Actualizar";
+    btn.style.cssText = [
+      "background:#fff",
+      "color:#4f46e5",
+      "border:none",
+      "border-radius:8px",
+      "padding:7px 14px",
+      "font-size:13px",
+      "font-weight:700",
+      "cursor:pointer",
+      "white-space:nowrap",
+    ].join(";");
+    btn.addEventListener("click", reloadNow);
+    b.appendChild(txt);
+    b.appendChild(btn);
+    (document.body || document.documentElement).appendChild(b);
+  }
+
+  async function comprobar() {
+    if (reloading) return;
+    try {
+      // fetch (mode != navigate) → pasa de largo el SW; no-store evita el caché
+      // HTTP. Sondeamos SIEMPRE "/" (ruta fija, independiente de dónde esté
+      // navegando la SPA): cualquier página del shell trae los bundles /assets/.
+      var res = await fetch("/?_v=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      var firma = firmaDeHTML(await res.text());
+      if (!firma) return; // no pudimos leer bundles: reintenta luego
+      if (baseline === null) {
+        baseline = firma; // primera lectura = build que estamos corriendo
+        return;
+      }
+      if (firma !== baseline && !pending) {
+        pending = true;
+        mostrarAviso();
+      }
+    } catch (e) {
+      /* sin conexión u otro: reintenta en el próximo ciclo */
+    }
+  }
+
+  // Si ya hay build nuevo y la pestaña pasa a segundo plano, recargamos ahí
+  // (invisible, no interrumpe nada en pantalla). Al volver a foco, revisamos por
+  // si se publicó algo mientras no mirábamos.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      if (pending) reloadNow();
+    } else {
+      comprobar();
+    }
+  });
+
+  setInterval(comprobar, CHECK_MS);
+  setTimeout(comprobar, 5000); // fija el baseline poco después de arrancar
+
+  // Si se publica un sw.js nuevo y toma control, también avisamos/refrescamos
+  // (salvo el primer claim, que no implica cambio de versión).
+  if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController) {
+        hadController = true;
+        return;
+      }
+      if (pending) reloadNow();
+      else mostrarAviso();
+    });
+  }
+})();
