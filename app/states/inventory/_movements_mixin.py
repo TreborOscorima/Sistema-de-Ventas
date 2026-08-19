@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, date
 from typing import Any
 
 import reflex as rx
@@ -126,16 +125,16 @@ class MovementsMixin:
 
             if date_from:
                 try:
-                    dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                    # Límite inferior = inicio del día LOCAL de la empresa, en UTC.
+                    dt_from, _ = self._company_day_bounds_utc_naive(date_from)
                     stmt = stmt.where(StockMovement.timestamp >= dt_from)
                 except ValueError:
                     pass
 
             if date_to:
                 try:
-                    dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(
-                        hour=23, minute=59, second=59
-                    )
+                    # Límite superior = fin del día LOCAL de la empresa, en UTC.
+                    _, dt_to = self._company_day_bounds_utc_naive(date_to)
                     stmt = stmt.where(StockMovement.timestamp <= dt_to)
                 except ValueError:
                     pass
@@ -161,15 +160,13 @@ class MovementsMixin:
         self.movements_total_count = total
         self.movements_total_pages = max(1, (total + per_page - 1) // per_page)
 
-        tz_offset = getattr(self, "tz_offset_hours", 0) or 0
-
         result: list[dict] = []
         for movement, product, user in rows:
-            ts = movement.timestamp
-            if ts and tz_offset:
-                from datetime import timedelta
-                ts = ts + timedelta(hours=tz_offset)
-            ts_str = ts.strftime("%d/%m/%Y %H:%M") if ts else "-"
+            # timestamp se guarda en UTC-naive (utc_now_naive). Convertimos a la
+            # zona horaria de la empresa (país/IANA configurado) para mostrar.
+            ts_str = self._format_company_datetime(
+                movement.timestamp, "%d/%m/%Y %H:%M", empty="-"
+            )
 
             qty = float(movement.quantity or 0)
             qty_str = f"+{abs(qty):g}" if qty >= 0 else f"-{abs(qty):g}"
@@ -224,16 +221,16 @@ class MovementsMixin:
 
             if date_from:
                 try:
-                    dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+                    # Límite inferior = inicio del día LOCAL de la empresa, en UTC.
+                    dt_from, _ = self._company_day_bounds_utc_naive(date_from)
                     stmt = stmt.where(StockMovement.timestamp >= dt_from)
                 except ValueError:
                     pass
 
             if date_to:
                 try:
-                    dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(
-                        hour=23, minute=59, second=59
-                    )
+                    # Límite superior = fin del día LOCAL de la empresa, en UTC.
+                    _, dt_to = self._company_day_bounds_utc_naive(date_to)
                     stmt = stmt.where(StockMovement.timestamp <= dt_to)
                 except ValueError:
                     pass
@@ -251,7 +248,6 @@ class MovementsMixin:
 
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today_str = self._display_now().strftime("%d/%m/%Y")
-        tz_offset = getattr(self, "tz_offset_hours", 0) or 0
 
         wb, ws = create_excel_workbook("Movimientos de Stock")
 
@@ -286,11 +282,9 @@ class MovementsMixin:
         row += 1
 
         for movement, product, user in rows:
-            ts = movement.timestamp
-            if ts and tz_offset:
-                from datetime import timedelta
-                ts = ts + timedelta(hours=tz_offset)
-            ts_str = ts.strftime("%d/%m/%Y %H:%M") if ts else "-"
+            ts_str = self._format_company_datetime(
+                movement.timestamp, "%d/%m/%Y %H:%M", empty="-"
+            )
 
             qty = float(movement.quantity or 0)
             qty_str = f"+{abs(qty):g}" if qty >= 0 else f"-{abs(qty):g}"
