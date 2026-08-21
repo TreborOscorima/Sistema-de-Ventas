@@ -49,6 +49,7 @@ from app.utils.exports import (
 )
 from app.utils.tenant import tenant_bypass
 from app.utils.formatting import fmt_input_num, fmt_price
+from app.utils.pagination import build_page_window
 
 REPORT_METHOD_KEYS = [
     "cash",
@@ -1491,6 +1492,11 @@ class HistorialState(MixinState):
         if 1 <= page_num <= self.total_pages:
             self.current_page_history = page_num
             self._refresh_history_cache()
+
+    @rx.var(cache=False)
+    def history_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.current_page_history, self.total_pages)
 
 
     @rx.event
@@ -3125,6 +3131,11 @@ class HistorialState(MixinState):
     def set_returns_report_page(self, page: int):
         if 1 <= page <= self.returns_report_total_pages:
             self.returns_report_page = page
+
+    @rx.var(cache=False)
+    def returns_report_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.returns_report_page, self.returns_report_total_pages)
 
     @rx.event
     def export_returns_excel(self):

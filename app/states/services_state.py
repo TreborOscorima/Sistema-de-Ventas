@@ -28,6 +28,7 @@ from app.utils.sanitization import (
 )
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice, FieldPriceGroup
 from .mixin_state import MixinState
+from app.utils.pagination import build_page_window
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
 from app.utils.formatting import fmt_input_num, fmt_price, format_number
 from app.utils.print_helper import build_print_script
@@ -991,6 +992,11 @@ class ServicesState(MixinState):
     @rx.var(cache=True)
     def paginated_reservations(self) -> list[FieldReservation]:
         return self.service_reservations
+
+    @rx.var(cache=False)
+    def reservation_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.reservation_current_page, self.reservation_total_pages)
 
     @rx.event
     def set_reservation_page(self, page: int):

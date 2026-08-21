@@ -16,6 +16,7 @@ from app.states.mixin_state import ScopedCtx
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like
 from app.utils.pricing import resolve_effective_price
+from app.utils.pagination import build_page_window
 
 DEFAULT_LOW_STOCK_THRESHOLD = 5
 
@@ -684,6 +685,11 @@ class SearchMixin:
         if self.inventory_current_page > self.inventory_total_pages:
             return self.inventory_total_pages
         return self.inventory_current_page
+
+    @rx.var(cache=False)
+    def inventory_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.inventory_current_page, self.inventory_total_pages)
 
     @rx.event
     def set_inventory_search_term(self, value: str):

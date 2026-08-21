@@ -212,6 +212,8 @@ def cashbox_logs_section() -> rx.Component:
         total_pages=State.cashbox_log_total_pages,
         on_prev=State.prev_cashbox_log_page,
         on_next=State.next_cashbox_log_page,
+        on_goto=lambda p: State.set_cashbox_log_page(p),
+        page_window=State.cashbox_log_page_window,
       ),
       rx.fragment(),
     ),

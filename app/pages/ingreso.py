@@ -246,7 +246,7 @@ def ingreso_page() -> rx.Component:
                                     supplier=supplier: State.select_supplier(
                                         supplier
                                     ),
-                                    on_mouse_enter=lambda supplier=supplier: State.set_purchase_supplier_active_index(
+                                    on_mouse_enter=State.set_purchase_supplier_active_index(
                                         supplier["index"]
                                     ),
                                     class_name=rx.cond(
@@ -631,7 +631,7 @@ def ingreso_page() -> rx.Component:
                                 suggestion=suggestion: State.select_product_for_entry(
                                     suggestion["value"]
                                 ),
-                                on_mouse_enter=lambda suggestion=suggestion: State.set_entry_autocomplete_active_index(
+                                on_mouse_enter=State.set_entry_autocomplete_active_index(
                                     suggestion["index"]
                                 ),
                                 class_name=rx.cond(

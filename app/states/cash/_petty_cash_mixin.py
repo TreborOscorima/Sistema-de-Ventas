@@ -15,6 +15,7 @@ from app.models import (
 from app.i18n import MSG
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import sanitize_notes_preserve_spaces
+from app.utils.pagination import build_page_window
 from ..types import CashboxLogEntry
 
 _PETTY_CASH_ACTIONS = ["gasto_caja_chica", "ingreso_caja_chica"]
@@ -65,6 +66,11 @@ class PettyCashMixin:
     petty_cash_filter_date_to: str = ""       # YYYY-MM-DD
 
     # ── Paginación ──────────────────────────────────────────────────────────
+    @rx.var(cache=False)
+    def petty_cash_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.petty_cash_current_page, self.petty_cash_total_pages)
+
     @rx.event
     def set_petty_cash_page(self, page: int):
         if 1 <= page <= self.petty_cash_total_pages:

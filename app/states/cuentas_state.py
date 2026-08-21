@@ -38,6 +38,7 @@ from app.services.credit_service import CreditService
 from app.services.alert_service import get_overdue_count
 from app.utils.db import get_async_session
 from app.utils.formatting import fmt_input_num, fmt_price
+from app.utils.pagination import build_page_window
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -550,6 +551,16 @@ class CuentasState(MixinState):
             self.debtors_page -= 1
 
     @rx.event
+    def set_debtors_page(self, page: int):
+        if 1 <= page <= self.debtors_total_pages:
+            self.debtors_page = page
+
+    @rx.var(cache=False)
+    def debtors_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.debtors_page, self.debtors_total_pages)
+
+    @rx.event
     def next_installments_page(self):
         if self.installments_page < self.installments_total_pages:
             self.installments_page += 1
@@ -558,6 +569,16 @@ class CuentasState(MixinState):
     def prev_installments_page(self):
         if self.installments_page > 1:
             self.installments_page -= 1
+
+    @rx.event
+    def set_installments_page(self, page: int):
+        if 1 <= page <= self.installments_total_pages:
+            self.installments_page = page
+
+    @rx.var(cache=False)
+    def installments_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.installments_page, self.installments_total_pages)
 
     @rx.event
     async def export_cuentas_excel(self, client_id: int | None = None):

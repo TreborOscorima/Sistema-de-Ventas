@@ -172,6 +172,8 @@ def compras_page() -> rx.Component:
       total_pages=State.purchase_total_pages,
       on_prev=State.prev_purchase_page,
       on_next=State.next_purchase_page,
+      on_goto=lambda p: State.set_purchase_page(p),
+      page_window=State.purchase_page_window,
     ),
     class_name=f"{CARD_STYLES['default']} flex flex-col {SPACING['card_gap']}",
   )

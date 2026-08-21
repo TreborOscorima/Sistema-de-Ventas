@@ -10,10 +10,21 @@ from app.models import CashboxLog as CashboxLogModel, User as UserModel, Sale, S
 from app.i18n import MSG
 from ..types import CashboxSale, CashboxLogEntry
 from app.utils.formatting import fmt_price
+from app.utils.pagination import build_page_window
 
 
 class HistoryMixin:
     """Mixin with history/listing-related methods for the cash state."""
+
+    @rx.var(cache=False)
+    def cashbox_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.cashbox_current_page, self.cashbox_total_pages)
+
+    @rx.var(cache=False)
+    def cashbox_log_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.cashbox_log_current_page, self.cashbox_log_total_pages)
 
     @rx.event
     def toggle_cashbox_sale_detail(self, sale_id: str):

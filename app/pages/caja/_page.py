@@ -201,6 +201,8 @@ def cashbox_page() -> rx.Component:
               total_pages=State.cashbox_total_pages,
               on_prev=State.prev_cashbox_page,
               on_next=State.next_cashbox_page,
+              on_goto=lambda p: State.set_cashbox_page(p),
+              page_window=State.cashbox_page_window,
             ),
           ),
           style="highlight",

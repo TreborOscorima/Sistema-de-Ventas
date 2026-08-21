@@ -359,6 +359,8 @@ def reservations_table() -> rx.Component:
         total_pages=State.reservation_total_pages,
         on_prev=State.prev_reservation_page,
         on_next=State.next_reservation_page,
+        on_goto=lambda p: State.set_reservation_page(p),
+        page_window=State.reservation_page_window,
       ),
     ),
     class_name=f"{CARD_STYLES['default']} flex flex-col gap-3",

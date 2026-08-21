@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 from app.models import StockMovement, Product
 from app.models.auth import User
+from app.utils.pagination import build_page_window
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -36,6 +37,11 @@ class MovementsMixin:
     movements_search: str = ""
     movements_section_open: bool = False
     movements_total_count: int = 0
+
+    @rx.var(cache=False)
+    def movements_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.movements_current_page, self.movements_total_pages)
 
     # ── Toggle sección ────────────────────────────────────────────
 

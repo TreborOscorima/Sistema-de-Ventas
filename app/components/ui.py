@@ -922,11 +922,51 @@ def date_range_filter(
     )
 
 
+_PAGE_ICON_BTN = (
+    "h-8 w-8 flex items-center justify-center rounded-md border border-slate-200 "
+    "text-slate-600 hover:bg-slate-100 disabled:opacity-40 "
+    "disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+)
+_PAGE_NUM_BASE = (
+    "min-w-[2rem] h-8 px-2 flex items-center justify-center text-sm font-medium "
+    "rounded-md transition-colors tabular-nums"
+)
+
+
+def _page_number_button(page: rx.Var, current_page: rx.Var, on_goto: Callable) -> rx.Component:
+    """Un token de la barra numérica: elipsis (-1) o botón de página clickeable."""
+    return rx.cond(
+        page == -1,
+        rx.el.span(
+            "…",
+            class_name="min-w-[2rem] h-8 flex items-center justify-center text-sm text-slate-400 select-none",
+        ),
+        rx.cond(
+            page == current_page,
+            rx.el.button(
+                page.to_string(),
+                type="button",
+                disabled=True,
+                aria_current="page",
+                class_name=_PAGE_NUM_BASE + " bg-indigo-600 text-white cursor-default",
+            ),
+            rx.el.button(
+                page.to_string(),
+                type="button",
+                on_click=on_goto(page),
+                class_name=_PAGE_NUM_BASE + " text-slate-600 border border-slate-200 hover:bg-slate-100 cursor-pointer",
+            ),
+        ),
+    )
+
+
 def pagination_controls(
     current_page: rx.Var,
     total_pages: rx.Var,
     on_prev: Callable,
     on_next: Callable,
+    on_goto: Callable | None = None,
+    page_window: rx.Var | None = None,
 ) -> rx.Component:
     """
     Crea controles de paginacion con botones anterior/siguiente e info.
@@ -936,41 +976,93 @@ def pagination_controls(
         total_pages: Total de paginas (var reactiva)
         on_prev: Manejador para pagina anterior
         on_next: Manejador para pagina siguiente
+        on_goto: (opcional) Manejador que recibe un nº de página y salta a ella.
+            Si se pasa junto con `page_window`, se renderiza la barra numérica
+            clickeable (con «Primera»/«Última» y elipsis). Si es None, se mantiene
+            el comportamiento clásico (solo Anterior/Siguiente + texto).
+        page_window: (opcional) Lista reactiva de nº de página a mostrar; usar el
+            valor -1 como marcador de elipsis (…).
 
     Retorna:
         Componente de controles de paginacion
     """
+    # Modo clásico (retrocompatible): solo Anterior / Siguiente + texto.
+    if on_goto is None or page_window is None:
+        return rx.el.div(
+            rx.el.button(
+                rx.icon("chevron-left", class_name="h-4 w-4"),
+                "Anterior",
+                on_click=on_prev,
+                disabled=current_page <= 1,
+                class_name=rx.cond(
+                    current_page <= 1,
+                    BUTTON_STYLES["disabled"],
+                    BUTTON_STYLES["secondary"],
+                ),
+            ),
+            rx.el.span(
+                "Página ",
+                current_page.to_string(),
+                " de ",
+                total_pages.to_string(),
+                class_name="text-sm text-slate-500 tabular-nums",
+            ),
+            rx.el.button(
+                "Siguiente",
+                rx.icon("chevron-right", class_name="h-4 w-4"),
+                on_click=on_next,
+                disabled=current_page >= total_pages,
+                class_name=rx.cond(
+                    current_page >= total_pages,
+                    BUTTON_STYLES["disabled"],
+                    BUTTON_STYLES["secondary"],
+                ),
+            ),
+            class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
+        )
+
+    # Modo numérico: «Primera ‹ [1 2 … 37] › Última».
     return rx.el.div(
         rx.el.button(
-            rx.icon("chevron-left", class_name="h-4 w-4"),
-            "Anterior",
-            on_click=on_prev,
+            rx.icon("chevrons-left", class_name="h-4 w-4"),
+            on_click=on_goto(1),
             disabled=current_page <= 1,
-            class_name=rx.cond(
-                current_page <= 1,
-                BUTTON_STYLES["disabled"],
-                BUTTON_STYLES["secondary"],
-            ),
-        ),
-        rx.el.span(
-            "Página ",
-            current_page.to_string(),
-            " de ",
-            total_pages.to_string(),
-            class_name="text-sm text-slate-500 tabular-nums",
+            type="button",
+            title="Primera página",
+            class_name=_PAGE_ICON_BTN,
         ),
         rx.el.button(
-            "Siguiente",
+            rx.icon("chevron-left", class_name="h-4 w-4"),
+            on_click=on_prev,
+            disabled=current_page <= 1,
+            type="button",
+            title="Anterior",
+            class_name=_PAGE_ICON_BTN,
+        ),
+        rx.el.div(
+            rx.foreach(
+                page_window,
+                lambda p: _page_number_button(p, current_page, on_goto),
+            ),
+            class_name="flex items-center gap-1",
+        ),
+        rx.el.button(
             rx.icon("chevron-right", class_name="h-4 w-4"),
             on_click=on_next,
             disabled=current_page >= total_pages,
-            class_name=rx.cond(
-                current_page >= total_pages,
-                BUTTON_STYLES["disabled"],
-                BUTTON_STYLES["secondary"],
-            ),
+            type="button",
+            title="Siguiente",
+            class_name=_PAGE_ICON_BTN,
         ),
-        class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
+        rx.el.button(
+            rx.icon("chevrons-right", class_name="h-4 w-4"),
+            on_click=on_goto(total_pages),
+            disabled=current_page >= total_pages,
+            type="button",
+            title="Última página",
+            class_name=_PAGE_ICON_BTN,
+        ),
+        class_name="flex flex-row justify-center items-center gap-1.5 mt-6 flex-wrap",
     )
 
 

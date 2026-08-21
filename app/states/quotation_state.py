@@ -22,6 +22,7 @@ from app.services.quotation_service import (
 from app.utils.db import get_async_session
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.timezone import utc_now_naive
+from app.utils.pagination import build_page_window
 
 from .mixin_state import MixinState, require_permission
 
@@ -693,6 +694,17 @@ class QuotationState(MixinState):
         if self.quotations_page < max_page:
             self.quotations_page += 1
             await self._load_quotations()
+
+    @rx.event
+    async def set_quotations_page(self, page: int):
+        if 1 <= page <= self.quotations_total_pages and page != self.quotations_page:
+            self.quotations_page = page
+            await self._load_quotations()
+
+    @rx.var(cache=False)
+    def quotations_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.quotations_page, self.quotations_total_pages)
 
     @rx.event
     async def set_quotations_filter_status(self, value: str):

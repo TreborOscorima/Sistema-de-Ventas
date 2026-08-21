@@ -334,6 +334,8 @@ def movements_section() -> rx.Component:
                             total_pages=State.movements_total_pages,
                             on_prev=lambda: State.set_movements_page(State.movements_current_page - 1),
                             on_next=lambda: State.set_movements_page(State.movements_current_page + 1),
+                            on_goto=lambda p: State.set_movements_page(p),
+                            page_window=State.movements_page_window,
                         ),
                         class_name="flex items-center justify-between px-5 py-3 border-t border-slate-100",
                     ),

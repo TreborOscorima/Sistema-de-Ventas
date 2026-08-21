@@ -273,6 +273,8 @@ def petty_cash_view() -> rx.Component:
             total_pages=State.petty_cash_total_pages,
             on_prev=State.prev_petty_cash_page,
             on_next=State.next_petty_cash_page,
+            on_goto=lambda p: State.set_petty_cash_page(p),
+            page_window=State.petty_cash_page_window,
           ),
           class_name="px-4 py-3 border-t border-slate-100",
         ),

@@ -269,6 +269,87 @@ class TransferMixin:
         ]
 
     @rx.event
+    def transfer_clear_all(self):
+        """Vacía el carrito de transferencia de un solo click."""
+        self.transfer_items = []
+        self.transfer_search_term = ""
+        self.transfer_search_results = []
+
+    @rx.event
+    def transfer_add_all(self):
+        """Carga TODO el stock disponible de la sucursal actual al carrito.
+
+        Expande variantes (cada variante con stock > 0 es una fila transferible) y
+        setea la cantidad al stock completo — el usuario puede ajustar antes de
+        confirmar. Tope defensivo para no inflar el estado con inventarios enormes.
+        """
+        CAP = 500
+        rows: List[Dict[str, Any]] = []
+        try:
+            with self.scoped_session() as ctx:
+                prods = ctx.session.exec(
+                    select(Product)
+                    .where(
+                        Product.company_id == ctx.company_id,
+                        Product.branch_id == ctx.branch_id,
+                        Product.is_active == True,  # noqa: E712
+                    )
+                    .order_by(Product.description)
+                ).all()
+
+                for p in prods:
+                    variants = ctx.session.exec(
+                        select(ProductVariant).where(
+                            ProductVariant.company_id == ctx.company_id,
+                            ProductVariant.branch_id == ctx.branch_id,
+                            ProductVariant.product_id == p.id,
+                        )
+                    ).all()
+                    if variants:
+                        for v in variants:
+                            if Decimal(str(v.stock or 0)) > 0:
+                                rows.append(self._variant_row(p, v))
+                    elif Decimal(str(p.stock or 0)) > 0:
+                        rows.append(self._product_row(p))
+        except ValueError:
+            return
+
+        if not rows:
+            return self.add_notification(
+                "No hay productos con stock para transferir.", "warning"
+            )
+
+        capped = len(rows) > CAP
+        rows = rows[:CAP]
+
+        self.transfer_items = [
+            {
+                "product_id": r["id"],
+                "key": r["key"],
+                "variant_id": r["variant_id"],
+                "variant_label": r["variant_label"],
+                "barcode": r["barcode"],
+                "description": r["description"],
+                "available_stock": r["stock"],
+                "unit": r["unit"],
+                "quantity": r["stock"],
+            }
+            for r in rows
+        ]
+        self.transfer_search_term = ""
+        self.transfer_search_results = []
+
+        if capped:
+            return self.add_notification(
+                f"Se agregaron los primeros {CAP} productos (hay más). "
+                "Transfiera por lotes o ajuste la selección.",
+                "warning",
+            )
+        return self.add_notification(
+            f"Se agregaron {len(rows)} productos con su stock completo.", "success"
+        )
+
+    @rx.event
     def transfer_update_qty(self, key: str, qty: str):
         new_items = []
         for item in self.transfer_items:

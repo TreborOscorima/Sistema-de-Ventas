@@ -907,6 +907,8 @@ def returns_report_section() -> rx.Component:
         total_pages=State.returns_report_total_pages,
         on_prev=lambda: State.set_returns_report_page(State.returns_report_page - 1),
         on_next=lambda: State.set_returns_report_page(State.returns_report_page + 1),
+        on_goto=lambda p: State.set_returns_report_page(p),
+        page_window=State.returns_report_page_window,
       ),
       rx.fragment(),
     ),
@@ -967,6 +969,8 @@ def historial_page() -> rx.Component:
         total_pages=State.total_pages,
         on_prev=lambda: State.set_history_page(State.current_page_history - 1),
         on_next=lambda: State.set_history_page(State.current_page_history + 1),
+        on_goto=lambda p: State.set_history_page(p),
+        page_window=State.history_page_window,
       ),
       # Sección de devoluciones
       returns_report_section(),

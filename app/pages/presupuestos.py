@@ -753,6 +753,8 @@ def presupuestos_page() -> rx.Component:
             total_pages=State.quotations_total_pages,
             on_prev=State.quotations_prev_page,
             on_next=State.quotations_next_page,
+            on_goto=lambda p: State.set_quotations_page(p),
+            page_window=State.quotations_page_window,
         ),
 
         # Modales

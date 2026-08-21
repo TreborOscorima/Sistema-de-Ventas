@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.models import Purchase, Supplier, Product, PurchaseItem, StockMovement, ProductBatch, ProductVariant
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like, sanitize_text
+from app.utils.pagination import build_page_window
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -103,6 +104,11 @@ class PurchasesState(MixinState):
         if 1 <= page <= self.purchase_total_pages:
             self.purchase_current_page = page
             self._refresh_purchase_cache()
+
+    @rx.var(cache=False)
+    def purchase_page_window(self) -> list[int]:
+        """Ventana de páginas para la barra numérica (ver build_page_window)."""
+        return build_page_window(self.purchase_current_page, self.purchase_total_pages)
 
     @rx.event
     def prev_purchase_page(self):

@@ -551,6 +551,8 @@ def inventario_page() -> rx.Component:
             total_pages=State.inventory_total_pages,
             on_prev=lambda: State.set_inventory_page(State.inventory_display_page - 1),
             on_next=lambda: State.set_inventory_page(State.inventory_display_page + 1),
+            on_goto=lambda p: State.set_inventory_page(p),
+            page_window=State.inventory_page_window,
           ),
           rx.fragment(),
         ),
