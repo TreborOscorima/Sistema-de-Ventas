@@ -1,0 +1,74 @@
+# Diagnóstico READ-ONLY de producción (Docker) vía SSH — NO despliega nada.
+#
+# Reúne, del contenedor vivo de prod, la evidencia para explicar el
+# "Error al procesar la transferencia":
+#   1. `alembic current`  → ¿aplicó la migración z1a2b3c4 (stock→18,4)?
+#   2. tipo REAL de las columnas de stock/cantidad (information_schema).
+#   3. el traceback REAL de los últimos intentos fallidos de transferencia
+#      (lo que `logger.exception` escribió a los logs y la UI oculta).
+#
+# Solo lee: docker exec/logs de solo lectura. Sin git, sin build, sin restart.
+# Disparo: Actions → diag-prod → Run workflow  (o `gh workflow run diag-prod.yml`).
+#
+# Reutiliza los mismos secrets que deploy-prod (DEPLOY_SSH_*).
+
+name: diag-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      log_hours:
+        description: Horas de logs hacia atrás a inspeccionar
+        required: false
+        default: "120"
+        type: string
+
+concurrency:
+  group: diag-prod
+  cancel-in-progress: true
+
+jobs:
+  diag:
+    name: Diagnóstico read-only (SSH)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Inspeccionar prod (solo lectura)
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          command_timeout: 8m
+          envs: LOG_HOURS
+          script: |
+            set -uo pipefail
+            CONT="$(docker ps --format '{{.Names}}' | grep -E '^tuwayki_sys$' | head -1)"
+            if [ -z "$CONT" ]; then
+              CONT="$(docker ps --format '{{.Names}}' | grep tuwayki_sys | head -1)"
+            fi
+            echo "== Contenedor app: ${CONT:-NO ENCONTRADO} =="
+            if [ -z "$CONT" ]; then
+              echo "No hay contenedor tuwayki_sys corriendo"; exit 1
+            fi
+
+            echo ""
+            echo "== 1) alembic current (¿migración aplicada?) =="
+            docker exec "$CONT" sh -c 'cd /app && alembic current' 2>&1 | tail -5 || true
+
+            echo ""
+            echo "== 2) Tipo REAL de columnas de stock/cantidad =="
+            docker exec "$CONT" sh -c 'cd /app && PYTHONPATH=/app python scripts/diag_prod_schema.py' 2>&1 \
+              | grep '\[diag\]' || echo "(no se pudo leer el esquema)"
+
+            echo ""
+            echo "== 3) Traceback REAL de transferencias fallidas (últimas ${LOG_HOURS}h) =="
+            LOGS="$(docker logs "$CONT" --since "${LOG_HOURS}h" 2>&1 || true)"
+            HITS="$(printf '%s\n' "$LOGS" | grep -c 'Error en transferencia de stock' || true)"
+            echo "coincidencias 'Error en transferencia de stock': ${HITS:-0}"
+            printf '%s\n' "$LOGS" \
+              | grep -A55 'Error en transferencia de stock' \
+              | tail -180 || echo "(sin traceback de transferencia en la ventana)"
+        env:
+          LOG_HOURS: ${{ inputs.log_hours }}
