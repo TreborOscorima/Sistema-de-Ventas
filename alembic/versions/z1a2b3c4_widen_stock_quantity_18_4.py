@@ -48,7 +48,21 @@ COLUMNS = [
 
 
 def _alter(to_type, from_type):
+    # Defensivo: el historial de migraciones del repo es inconsistente — algunas
+    # tablas (p.ej. stocktransferitem, quotationitem) las crea una migración que NO
+    # está en la ascendencia del head actual, así que en una BD reconstruida sólo
+    # con `alembic upgrade head` (CI) todavía no existen en este punto. Sólo
+    # alteramos la columna si su tabla y columna existen: en la BD real de
+    # producción (que ya tiene todas las tablas) se amplían las 16; en una BD nueva
+    # se saltan las ausentes (los tests las crean vía metadata con el tipo nuevo).
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = set(inspector.get_table_names())
     for table, column, nullable, server_default in COLUMNS:
+        if table not in existing_tables:
+            continue
+        if column not in {c["name"] for c in inspector.get_columns(table)}:
+            continue
         op.alter_column(
             table,
             column,
