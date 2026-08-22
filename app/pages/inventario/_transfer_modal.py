@@ -102,29 +102,32 @@ def _barcode_scanner() -> rx.Component:
 def _bulk_actions() -> rx.Component:
     """Acciones rápidas: cargar todo el stock de la sucursal / vaciar el carrito."""
     return rx.el.div(
-        rx.el.button(
-            rx.icon("layers", class_name="h-4 w-4"),
-            "Agregar todo el stock",
-            on_click=State.transfer_add_all,
-            type="button",
-            class_name="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors",
-        ),
-        rx.cond(
-            State.transfer_items.length() > 0,
+        rx.el.div(
             rx.el.button(
-                rx.icon("eraser", class_name="h-4 w-4"),
-                "Quitar todos",
-                on_click=State.transfer_clear_all,
+                rx.icon("layers", class_name="h-4 w-4"),
+                "Agregar todo el stock",
+                on_click=State.transfer_add_all,
                 type="button",
-                class_name="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors",
+                class_name="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors",
             ),
-            rx.fragment(),
+            rx.cond(
+                State.transfer_items.length() > 0,
+                rx.el.button(
+                    rx.icon("eraser", class_name="h-4 w-4"),
+                    "Quitar todos",
+                    on_click=State.transfer_clear_all,
+                    type="button",
+                    class_name="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors",
+                ),
+                rx.fragment(),
+            ),
+            class_name="flex items-center gap-2 flex-wrap",
         ),
-        rx.el.span(
+        rx.el.p(
             "Carga todos los productos con stock de esta sucursal (podés ajustar antes de confirmar).",
-            class_name="text-xs text-slate-400 italic w-full sm:w-auto sm:ml-auto sm:text-right",
+            class_name="text-xs text-slate-400 italic",
         ),
-        class_name="flex items-center gap-2 flex-wrap",
+        class_name="flex flex-col gap-1.5",
     )
 
 

@@ -49,6 +49,39 @@ async def main() -> None:
             f"[diag] RESUMEN: {widened}/{len(rows)} columnas objetivo en decimal(18,4)",
             flush=True,
         )
+
+        # Productos activos con stock residual (>0): para explicar cards como
+        # "Stock Bajo" / "Valor Inventario" tras una transferencia de "todo el
+        # stock". Reporta el stock del padre vs la SUMA de sus variantes — si
+        # difieren, el padre tiene un agregado fantasma que "agregar todo" no
+        # mueve (solo mueve variantes con stock > 0).
+        residual_sql = text(
+            "SELECT p.company_id, p.branch_id, p.barcode, p.description, "
+            "       p.unit, p.stock AS parent_stock, p.min_stock_alert, "
+            "       p.purchase_price, "
+            "       (SELECT COUNT(*) FROM productvariant v "
+            "          WHERE v.product_id = p.id AND v.branch_id = p.branch_id) AS n_variants, "
+            "       (SELECT COALESCE(SUM(v.stock),0) FROM productvariant v "
+            "          WHERE v.product_id = p.id AND v.branch_id = p.branch_id) AS variants_sum "
+            "FROM product p "
+            "WHERE p.is_active = 1 AND p.stock > 0 "
+            "ORDER BY p.purchase_price * p.stock DESC "
+            "LIMIT 25"
+        )
+        residuals = (await conn.execute(residual_sql)).all()
+        print(f"[diag] PRODUCTOS ACTIVOS CON STOCK>0: {len(residuals)}", flush=True)
+        for r in residuals:
+            (cid, bid, bc, desc, unit, pstock, minalert, pprice,
+             nvar, vsum) = r
+            drift = ""
+            if nvar and str(pstock) != str(vsum):
+                drift = f"  <<< DRIFT padre={pstock} != sum_variantes={vsum} >>>"
+            print(
+                f"[diag] resid emp={cid} suc={bid} '{desc}' cod={bc} unit={unit} "
+                f"stock={pstock} min={minalert} pcompra={pprice} "
+                f"variantes={nvar}{drift}",
+                flush=True,
+            )
     await async_engine.dispose()
 
 
