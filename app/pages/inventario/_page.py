@@ -181,6 +181,13 @@ def inventario_page() -> rx.Component:
               rx.input(
                 id="inventario_search_input",
                 placeholder="Buscar producto (F6)...",
+                # Controlado: el value refleja SIEMPRE el filtro activo. Sin esto
+                # el input queda "no controlado" y, tras un re-render (cambio de
+                # sucursal, remonte de página), la caja se dibuja vacía mientras
+                # el estado conserva el término viejo → filtro fantasma: la lista
+                # sale vacía pero las tarjetas (que ignoran la búsqueda) muestran
+                # todo. Con value= el término siempre es visible y limpiable.
+                value=State.inventory_search_term,
                 on_change=State.set_inventory_search_term,
                 class_name=INPUT_STYLES["default"],
               ),

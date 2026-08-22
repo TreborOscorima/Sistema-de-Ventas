@@ -1802,6 +1802,17 @@ class AuthState(MixinState):
                 yield rx.toast(MSG.AUTH_BRANCH_NO_ACCESS, duration=3000)
                 return
         self.selected_branch_id = str(branch_id_int)
+        # Al cambiar de sucursal, limpiar el filtro de inventario (búsqueda /
+        # categoría / página). Cada sucursal debe abrir con la vista completa;
+        # de lo contrario un término de búsqueda de la sucursal anterior queda
+        # activo y "esconde" el inventario de la nueva (lista vacía + tarjetas
+        # con todo). Guardado con hasattr por si el mixin de inventario no está.
+        if hasattr(self, "inventory_search_term"):
+            self.inventory_search_term = ""
+        if hasattr(self, "inventory_category_filter"):
+            self.inventory_category_filter = ""
+        if hasattr(self, "inventory_current_page"):
+            self.inventory_current_page = 1
         self.refresh_auth_runtime_cache()
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
