@@ -57,7 +57,7 @@ class Product(TenantMixin, SQLModel, table=True):
     category: str = Field(default="General", index=True, max_length=100)
     stock: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit: str = Field(default="Unidad")
     purchase_price: Decimal = Field(
@@ -81,7 +81,7 @@ class Product(TenantMixin, SQLModel, table=True):
     location: Optional[str] = Field(default=None)
     min_stock_alert: Decimal = Field(
         default=Decimal("5.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=False, server_default="5.0000"),
+        sa_column=sqlalchemy.Column(Numeric(18, 4), nullable=False, server_default="5.0000"),
     )
     # Proveedor preferido para reposición automática (nullable: no todos los
     # productos tienen proveedor fijo).
@@ -163,14 +163,14 @@ class ProductVariant(TenantMixin, SQLModel, table=True):
     color: Optional[str] = Field(default=None)
     stock: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     # Umbral de alerta de stock bajo por variante.
     # NULL = heredar del Product padre (Product.min_stock_alert).
     # Permite que una talla XL escasa dispare alerta aunque el producto raíz tenga stock.
     min_stock_alert: Optional[Decimal] = Field(
         default=None,
-        sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=True),
+        sa_column=sqlalchemy.Column(Numeric(18, 4), nullable=True),
     )
     # NULL = heredar precio del Product padre (comportamiento original).
     # NOT NULL = precio exclusivo de esta variante (ej: Talla XL cuesta más).
@@ -229,7 +229,7 @@ class ProductBatch(TenantMixin, SQLModel, table=True):
     )
     stock: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     product_id: Optional[int] = Field(default=None, foreign_key="product.id", index=True)
     product_variant_id: Optional[int] = Field(
@@ -290,7 +290,7 @@ class ProductKit(TenantMixin, SQLModel, table=True):
     )
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
 
     kit_product: "Product" = Relationship(
@@ -446,7 +446,7 @@ class StockMovement(TenantMixin, SQLModel, table=True):
     type: str = Field(nullable=False, index=True)
     quantity: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     description: str = Field(default="")
 
@@ -627,7 +627,7 @@ class StockTransferItem(SQLModel, table=True):
     )
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     product_name_snapshot: str = Field(default="", max_length=500)
 

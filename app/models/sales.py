@@ -183,7 +183,7 @@ class SaleItem(TenantMixin, SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit_price: Decimal = Field(
         default=Decimal("0.0000"),
@@ -453,7 +453,7 @@ class CashboxLog(TenantMixin, SQLModel, table=True):
     )
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit: str = Field(default="Unidad")
     cost: Decimal = Field(
@@ -747,7 +747,7 @@ class SaleReturnItem(TenantMixin, SQLModel, table=True):
     )
     quantity: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     refund_subtotal: Decimal = Field(
         default=Decimal("0.00"),

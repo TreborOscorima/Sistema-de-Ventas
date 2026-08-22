@@ -180,7 +180,7 @@ class QuotationItem(TenantMixin, SQLModel, table=True):
 
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit_price: Decimal = Field(
         default=Decimal("0.00"),

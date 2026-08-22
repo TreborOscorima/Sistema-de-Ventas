@@ -150,7 +150,7 @@ class PurchaseItem(TenantMixin, SQLModel, table=True):
 
     quantity: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit: str = Field(default="Unidad")
     unit_cost: Decimal = Field(
@@ -309,15 +309,15 @@ class PurchaseOrderItem(TenantMixin, SQLModel, table=True):
     barcode_snapshot: str = Field(default="")
     current_stock: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     min_stock_alert: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     suggested_quantity: Decimal = Field(
         default=Decimal("0.0000"),
-        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+        sa_column=sqlalchemy.Column(Numeric(18, 4)),
     )
     unit: str = Field(default="Unidad")
     unit_cost: Decimal = Field(
