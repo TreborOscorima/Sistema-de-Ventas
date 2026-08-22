@@ -100,6 +100,36 @@ async def main() -> None:
                 flush=True,
             )
 
+        # AUDITORÍA de unidades: productos con stock fraccionario (parte decimal
+        # != 0) cuya unidad NO permite decimales -> candidatos a "unidad mal
+        # importada" (deberían ser kg/ml/L). Muestra el desajuste sin tocar nada.
+        audit_sql = text(
+            "SELECT p.company_id, p.branch_id, p.barcode, p.description, "
+            "       p.unit, p.stock, "
+            "       COALESCE(u.allows_decimal, 0) AS unit_allows_decimal "
+            "FROM product p "
+            "LEFT JOIN unit u "
+            "  ON u.name = p.unit AND u.company_id = p.company_id "
+            "     AND u.branch_id = p.branch_id "
+            "WHERE p.is_active = 1 AND p.stock <> TRUNCATE(p.stock, 0) "
+            "ORDER BY p.company_id, p.branch_id, p.description "
+            "LIMIT 100"
+        )
+        audit = (await conn.execute(audit_sql)).all()
+        n_mismatch = sum(1 for r in audit if not r[6])
+        print(
+            f"[diag] === AUDITORÍA unidades: {len(audit)} productos con stock "
+            f"decimal; {n_mismatch} con unidad ENTERA (posible unidad mal puesta) ===",
+            flush=True,
+        )
+        for cid, bid, bc, desc, unit, stock, allows in audit:
+            flag = "" if allows else "  <<< unidad entera con stock decimal"
+            print(
+                f"[diag] audit emp={cid} suc={bid} '{desc}' cod={bc} "
+                f"unit={unit} allows_dec={int(allows)} stock={stock}{flag}",
+                flush=True,
+            )
+
         # Historial de un producto puntual (si se pasa DIAG_BARCODE): stock por
         # sucursal + últimos movimientos de kardex. Sirve para explicar por qué
         # un producto quedó en cierto stock.

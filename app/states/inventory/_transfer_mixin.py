@@ -18,7 +18,7 @@ from app.models import (
     User,
 )
 from app.models.inventory import TransferStatus
-from app.services.sale_service import StockError
+from app.services.sale_service import StockError, _round_quantity
 from app.services.transfer_service import TransferError, TransferService
 from app.utils.sanitization import escape_like
 
@@ -56,6 +56,17 @@ class TransferMixin:
             return str(int(d))
         return str(d.normalize())
 
+    def _full_stock_qty(self, value, unit: str) -> str:
+        """Cantidad para 'transferir todo': el stock completo redondeado con la
+        MISMA política (entero/decimal) que usa la resta de stock del servicio.
+
+        Así ``origen - cantidad`` da exactamente 0 y la sucursal queda vacía, sin
+        el residuo que dejaba truncar la cantidad mientras la resta redondeaba.
+        """
+        allows_decimal = self._unit_allows_decimal(unit)
+        rounded = _round_quantity(Decimal(str(value or 0)), allows_decimal)
+        return self._fmt_qty(rounded)
+
     def _product_row(self, p) -> Dict[str, Any]:
         return {
             "id": p.id,
@@ -65,6 +76,7 @@ class TransferMixin:
             "barcode": p.barcode or "",
             "description": p.description,
             "stock": self._fmt_stock(p.stock, p.unit),
+            "full_qty": self._full_stock_qty(p.stock, p.unit),
             "unit": p.unit,
         }
 
@@ -78,6 +90,7 @@ class TransferMixin:
             "barcode": v.sku or "",
             "description": p.description,
             "stock": self._fmt_stock(v.stock, p.unit),
+            "full_qty": self._full_stock_qty(v.stock, p.unit),
             "unit": p.unit,
         }
 
@@ -334,9 +347,9 @@ class TransferMixin:
                 "variant_label": r["variant_label"],
                 "barcode": r["barcode"],
                 "description": r["description"],
-                "available_stock": r["stock"],
+                "available_stock": r["full_qty"],
                 "unit": r["unit"],
-                "quantity": r["stock"],
+                "quantity": r["full_qty"],
             }
             for r in rows
         ]
