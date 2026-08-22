@@ -68,8 +68,24 @@ async def main() -> None:
             "ORDER BY p.purchase_price * p.stock DESC "
             "LIMIT 25"
         )
+        # Resumen por sucursal: cuántos productos activos con stock>0 y valor
+        # total. Revela cuál es el origen (pocos/1 residual) vs el destino.
+        branch_summary_sql = text(
+            "SELECT p.company_id, p.branch_id, "
+            "       COUNT(*) AS n_con_stock, "
+            "       SUM(p.purchase_price * p.stock) AS valor "
+            "FROM product p "
+            "WHERE p.is_active = 1 AND p.stock > 0 "
+            "GROUP BY p.company_id, p.branch_id "
+            "ORDER BY p.company_id, p.branch_id"
+        )
+        summ = (await conn.execute(branch_summary_sql)).all()
+        print("[diag] --- RESUMEN por sucursal (activos con stock>0) ---", flush=True)
+        for cid, bid, n, val in summ:
+            print(f"[diag] sucursal emp={cid} suc={bid}: {n} productos con stock, valor={val}", flush=True)
+
         residuals = (await conn.execute(residual_sql)).all()
-        print(f"[diag] PRODUCTOS ACTIVOS CON STOCK>0: {len(residuals)}", flush=True)
+        print(f"[diag] PRODUCTOS ACTIVOS CON STOCK>0 (top 25 por valor): {len(residuals)}", flush=True)
         for r in residuals:
             (cid, bid, bc, desc, unit, pstock, minalert, pprice,
              nvar, vsum) = r
