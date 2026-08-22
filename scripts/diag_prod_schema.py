@@ -65,8 +65,8 @@ async def main() -> None:
             "          WHERE v.product_id = p.id AND v.branch_id = p.branch_id) AS variants_sum "
             "FROM product p "
             "WHERE p.is_active = 1 AND p.stock > 0 "
-            "ORDER BY p.purchase_price * p.stock DESC "
-            "LIMIT 25"
+            "ORDER BY p.branch_id ASC, p.purchase_price * p.stock DESC "
+            "LIMIT 60"
         )
         # Resumen por sucursal: cuántos productos activos con stock>0 y valor
         # total. Revela cuál es el origen (pocos/1 residual) vs el destino.
