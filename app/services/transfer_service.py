@@ -419,10 +419,13 @@ class TransferService:
 
     @staticmethod
     async def _resolve_dest_product(session, *, company_id, dest_id, origin_product) -> Product:
+        # No filtramos por is_active: el barcode es UNIQUE por (empresa, sucursal,
+        # barcode) sin importar el estado. Si en el destino existe un producto
+        # BORRADO (soft-delete) con ese mismo barcode y lo ignoráramos, el INSERT
+        # posterior chocaría con la constraint y abortaría toda la transferencia.
         dest_query = select(Product).where(
             Product.company_id == company_id,
             Product.branch_id == dest_id,
-            Product.is_active == True,  # noqa: E712
         )
         if origin_product.barcode:
             dest_query = dest_query.where(Product.barcode == origin_product.barcode)
@@ -433,6 +436,10 @@ class TransferService:
             )
         dest_product = (await session.exec(dest_query.with_for_update())).first()
         if dest_product:
+            # Recibe stock nuevamente → si estaba borrado, se reactiva.
+            if not dest_product.is_active:
+                dest_product.is_active = True
+                session.add(dest_product)
             return dest_product
 
         dest_product = Product(

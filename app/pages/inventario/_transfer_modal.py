@@ -12,11 +12,65 @@ from app.components.ui import (
 )
 
 
+def _search_results_dropdown() -> rx.Component:
+    """Resultados de la búsqueda por nombre/código (dropdown del campo unificado)."""
+    return rx.cond(
+        State.transfer_search_results.length() > 0,
+        rx.el.div(
+            rx.foreach(
+                State.transfer_search_results,
+                lambda r: rx.el.button(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.span(
+                                r["description"],
+                                class_name="text-sm font-medium text-slate-700",
+                            ),
+                            rx.cond(
+                                r["variant_label"] != "",
+                                rx.el.span(
+                                    r["variant_label"],
+                                    class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded",
+                                ),
+                                rx.fragment(),
+                            ),
+                            class_name="flex items-center gap-1.5",
+                        ),
+                        rx.cond(
+                            r["barcode"] != "",
+                            rx.el.span(
+                                r["barcode"],
+                                class_name="text-xs text-slate-400 font-mono",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="flex flex-col items-start",
+                    ),
+                    rx.el.div(
+                        rx.el.span(
+                            r["stock"], " ", r["unit"],
+                            class_name="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
+                        ),
+                        rx.icon("circle-plus", class_name="h-5 w-5 text-indigo-500"),
+                        class_name="flex items-center gap-2 shrink-0",
+                    ),
+                    on_click=State.transfer_add_item(r["key"]),
+                    type="button",
+                    class_name=f"flex items-center justify-between w-full px-3 py-2.5 hover:bg-indigo-50 {TRANSITIONS['fast']} cursor-pointer text-left",
+                ),
+            ),
+            class_name=f"border border-slate-200 {RADIUS['lg']} overflow-hidden divide-y divide-slate-100 max-h-52 overflow-y-auto bg-white shadow-lg",
+        ),
+        rx.fragment(),
+    )
+
+
 def _barcode_scanner() -> rx.Component:
+    """Campo unificado: escanea códigos (Enter) y busca por nombre/código al escribir."""
     return rx.el.div(
         rx.el.label(
             rx.icon("scan-barcode", class_name="h-3.5 w-3.5"),
-            "Escanear código de barras",
+            "Escanear o buscar producto",
             class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
         ),
         rx.el.form(
@@ -25,7 +79,8 @@ def _barcode_scanner() -> rx.Component:
                 rx.el.input(
                     name="barcode",
                     key=State.transfer_barcode_key.to_string(),
-                    placeholder="Escanee o escriba el código y presione Enter...",
+                    on_change=State.transfer_search_products,
+                    placeholder="Escanee un código, o escriba nombre/código y presione Enter...",
                     auto_complete="off",
                     auto_focus=True,
                     class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
@@ -35,82 +90,10 @@ def _barcode_scanner() -> rx.Component:
             on_submit=State.transfer_barcode_submit,
             reset_on_submit=True,
         ),
+        _search_results_dropdown(),
         rx.el.p(
-            "Escanee un producto para agregarlo. Si ya existe, se incrementa la cantidad.",
+            "Escanee con el lector, o escriba para buscar por nombre o código. Enter agrega el código exacto.",
             class_name="text-xs text-slate-400 italic",
-        ),
-        class_name="flex flex-col gap-1.5",
-    )
-
-
-def _description_search() -> rx.Component:
-    return rx.el.div(
-        rx.el.label(
-            rx.icon("search", class_name="h-3.5 w-3.5"),
-            "Buscar por descripción",
-            class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
-        ),
-        rx.el.div(
-            rx.el.div(
-                rx.icon("search", class_name="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"),
-                rx.el.input(
-                    value=State.transfer_search_term,
-                    on_change=State.transfer_search_products,
-                    placeholder="Escriba para buscar por nombre o código...",
-                    class_name=INPUT_STYLES["default"] + " pl-9",
-                ),
-                class_name="relative",
-            ),
-            rx.cond(
-                State.transfer_search_results.length() > 0,
-                rx.el.div(
-                    rx.foreach(
-                        State.transfer_search_results,
-                        lambda r: rx.el.button(
-                            rx.el.div(
-                                rx.el.div(
-                                    rx.el.span(
-                                        r["description"],
-                                        class_name="text-sm font-medium text-slate-700",
-                                    ),
-                                    rx.cond(
-                                        r["variant_label"] != "",
-                                        rx.el.span(
-                                            r["variant_label"],
-                                            class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    class_name="flex items-center gap-1.5",
-                                ),
-                                rx.cond(
-                                    r["barcode"] != "",
-                                    rx.el.span(
-                                        r["barcode"],
-                                        class_name="text-xs text-slate-400 font-mono",
-                                    ),
-                                    rx.fragment(),
-                                ),
-                                class_name="flex flex-col items-start",
-                            ),
-                            rx.el.div(
-                                rx.el.span(
-                                    r["stock"], " ", r["unit"],
-                                    class_name="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
-                                ),
-                                rx.icon("circle-plus", class_name="h-5 w-5 text-indigo-500"),
-                                class_name="flex items-center gap-2 shrink-0",
-                            ),
-                            on_click=State.transfer_add_item(r["key"]),
-                            type="button",
-                            class_name=f"flex items-center justify-between w-full px-3 py-2.5 hover:bg-indigo-50 {TRANSITIONS['fast']} cursor-pointer text-left",
-                        ),
-                    ),
-                    class_name=f"border border-slate-200 {RADIUS['lg']} overflow-hidden divide-y divide-slate-100 max-h-52 overflow-y-auto bg-white shadow-lg",
-                ),
-                rx.fragment(),
-            ),
-            class_name="flex flex-col gap-1",
         ),
         class_name="flex flex-col gap-1.5",
     )
@@ -296,7 +279,6 @@ def transfer_modal() -> rx.Component:
                     class_name="border-t border-slate-100",
                 ),
                 _barcode_scanner(),
-                _description_search(),
                 _bulk_actions(),
                 rx.el.div(
                     class_name="border-t border-slate-100",
@@ -309,8 +291,8 @@ def transfer_modal() -> rx.Component:
                         class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
                     ),
                     rx.el.textarea(
-                        value=State.transfer_notes,
-                        on_change=State.transfer_set_notes,
+                        default_value=State.transfer_notes,
+                        on_blur=State.transfer_set_notes,
                         placeholder="Motivo de la transferencia...",
                         rows=2,
                         class_name=INPUT_STYLES["default"] + " resize-none",

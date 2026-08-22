@@ -248,6 +248,10 @@ class TransferMixin:
 
     @rx.event
     def transfer_add_item(self, key: str):
+        # Campo unificado: al elegir un resultado, remontamos el input (clave nueva)
+        # para limpiar el texto tipeado y reenfocar para el siguiente escaneo/búsqueda.
+        self.transfer_barcode_key += 1
+
         for item in self.transfer_items:
             if item["key"] == key:
                 return self.add_notification("Producto ya agregado.", "warning")
