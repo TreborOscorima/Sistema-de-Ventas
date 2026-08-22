@@ -100,6 +100,19 @@ async def main() -> None:
                 flush=True,
             )
 
+        # Unidades con decimales por empresa/sucursal: confirma si el auto-seed
+        # (kg/g/l/ml/m/cm) corrió. Si una empresa no las tiene, hay que sembrar.
+        units_sql = text(
+            "SELECT company_id, branch_id, "
+            "  GROUP_CONCAT(name ORDER BY name SEPARATOR ',') AS decimales "
+            "FROM unit WHERE allows_decimal = 1 "
+            "GROUP BY company_id, branch_id ORDER BY company_id, branch_id"
+        )
+        units = (await conn.execute(units_sql)).all()
+        print("[diag] --- Unidades DECIMALES por sucursal ---", flush=True)
+        for cid, bid, names in units:
+            print(f"[diag] unidades emp={cid} suc={bid}: {names}", flush=True)
+
         # AUDITORÍA de unidades: productos con stock fraccionario (parte decimal
         # != 0) cuya unidad NO permite decimales -> candidatos a "unidad mal
         # importada" (deberían ser kg/ml/L). Muestra el desajuste sin tocar nada.

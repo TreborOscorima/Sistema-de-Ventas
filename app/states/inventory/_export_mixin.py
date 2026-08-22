@@ -623,6 +623,20 @@ class ExportMixin:
                     else:
                         sale_price = Decimal(str(row.get("sale_price", 0) or 0))
 
+                    # Integridad unidad↔stock: no importar stock con decimales en
+                    # una unidad ENTERA. Se salta la fila y se reporta (avisar y
+                    # bloquear) — nunca redondear, para no adulterar cantidades.
+                    if (
+                        not self._unit_allows_decimal(unit)
+                        and stock != stock.to_integral_value()
+                    ):
+                        errors.append(
+                            f"{barcode or description}: la unidad «{unit}» no admite "
+                            f"decimales (stock {stock}). Corregí la unidad "
+                            f"(kg/g/L/ml/m/cm) o usá un stock entero."
+                        )
+                        continue
+
                     # Auto-crear categoría si no existe
                     if category_name not in existing_categories:
                         new_cat = Category(
@@ -712,7 +726,6 @@ class ExportMixin:
                 )
 
         self.import_processing = False
-        self.close_import_modal()
         self._inventory_update_trigger += 1
         self.load_categories()
         msg = f"Importación exitosa: {imported} nuevos, {updated} actualizados."
@@ -721,4 +734,12 @@ class ExportMixin:
                 f" ({stock_skipped} con stock gestionado por lotes/variantes: "
                 "no se modificó su stock)."
             )
+        if errors:
+            # Filas omitidas (p.ej. unidad entera con stock decimal): NO cerramos
+            # el modal y dejamos los errores a la vista para que el usuario
+            # corrija su archivo y reimporte esas filas.
+            self.import_errors = errors
+            msg += f" ⚠ {len(errors)} fila(s) omitidas — revisá el detalle."
+            return rx.toast(msg, duration=8000)
+        self.close_import_modal()
         return rx.toast(msg, duration=5000)

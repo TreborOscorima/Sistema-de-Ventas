@@ -886,6 +886,29 @@ class ProductMixin:
                 "El código de barras no puede estar vacío.", "error"
             )
 
+        # Integridad unidad↔stock: una unidad ENTERA (Unidad, caja, docena…) no
+        # puede tener stock con decimales. Si el producto se maneja por peso/
+        # volumen/longitud, su unidad debe permitir decimales (kg, g, L, ml, m).
+        unit_val = (product_data.get("unit") or "Unidad")
+        if not self._unit_allows_decimal(unit_val):
+            from decimal import Decimal as _D, InvalidOperation as _IO
+            _stock_val = (
+                self.variants_stock_total
+                if self.show_variants
+                else product_data.get("stock", 0)
+            )
+            try:
+                _stock_dec = _D(str(_stock_val or 0))
+            except (_IO, ValueError):
+                _stock_dec = _D(0)
+            if _stock_dec != _stock_dec.to_integral_value():
+                return self.add_notification(
+                    f"La unidad «{unit_val}» no admite decimales. Cambiá la unidad "
+                    f"a una que permita decimales (kg, g, L, ml, m, cm) o ingresá "
+                    f"un stock entero.",
+                    "error",
+                )
+
         if self.show_wholesale and self.price_tiers:
             min_qtys = []
             for tier in self.price_tiers:
