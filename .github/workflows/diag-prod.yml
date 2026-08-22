@@ -22,6 +22,11 @@ on:
         required: false
         default: "120"
         type: string
+      barcode:
+        description: (Opcional) Código de barras de un producto para volcar su stock por sucursal + kardex
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: diag-prod
@@ -41,7 +46,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           command_timeout: 8m
-          envs: LOG_HOURS
+          envs: LOG_HOURS,DIAG_BARCODE
           script: |
             set -uo pipefail
             CONT="$(docker ps --format '{{.Names}}' | grep -E '^tuwayki_sys$' | head -1)"
@@ -59,7 +64,7 @@ jobs:
 
             echo ""
             echo "== 2) Tipo REAL de columnas de stock/cantidad =="
-            docker exec "$CONT" sh -c 'cd /app && PYTHONPATH=/app python scripts/diag_prod_schema.py' 2>&1 \
+            docker exec -e DIAG_BARCODE="$DIAG_BARCODE" "$CONT" sh -c 'cd /app && PYTHONPATH=/app python scripts/diag_prod_schema.py' 2>&1 \
               | grep '\[diag\]' || echo "(no se pudo leer el esquema)"
 
             echo ""
@@ -72,3 +77,4 @@ jobs:
               | tail -180 || echo "(sin traceback de transferencia en la ventana)"
         env:
           LOG_HOURS: ${{ inputs.log_hours }}
+          DIAG_BARCODE: ${{ inputs.barcode }}

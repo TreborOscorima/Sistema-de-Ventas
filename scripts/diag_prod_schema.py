@@ -9,6 +9,7 @@ Uso (dentro del contenedor de la app):
     python /app/scripts/diag_prod_schema.py
 """
 import asyncio
+import os
 
 from sqlalchemy import text
 
@@ -98,6 +99,42 @@ async def main() -> None:
                 f"variantes={nvar}{drift}",
                 flush=True,
             )
+
+        # Historial de un producto puntual (si se pasa DIAG_BARCODE): stock por
+        # sucursal + últimos movimientos de kardex. Sirve para explicar por qué
+        # un producto quedó en cierto stock.
+        barcode = (os.environ.get("DIAG_BARCODE") or "").strip()
+        if barcode:
+            print(f"[diag] === HISTORIAL producto cod={barcode} ===", flush=True)
+            stock_rows = (await conn.execute(
+                text(
+                    "SELECT p.id, p.company_id, p.branch_id, p.description, "
+                    "       p.unit, p.stock, p.is_active "
+                    "FROM product p WHERE p.barcode = :bc "
+                    "ORDER BY p.company_id, p.branch_id"
+                ).bindparams(bc=barcode)
+            )).all()
+            for pid, cid, bid, desc, unit, stock, active in stock_rows:
+                print(
+                    f"[diag] prod id={pid} emp={cid} suc={bid} '{desc}' unit={unit} "
+                    f"stock={stock} activo={active}",
+                    flush=True,
+                )
+            mov_rows = (await conn.execute(
+                text(
+                    "SELECT sm.branch_id, sm.type, sm.quantity, sm.description, "
+                    "       sm.timestamp "
+                    "FROM stockmovement sm JOIN product p ON p.id = sm.product_id "
+                    "WHERE p.barcode = :bc "
+                    "ORDER BY sm.timestamp DESC, sm.id DESC LIMIT 20"
+                ).bindparams(bc=barcode)
+            )).all()
+            print(f"[diag] movimientos (últimos {len(mov_rows)}):", flush=True)
+            for bid, mtype, qty, mdesc, ts in mov_rows:
+                print(
+                    f"[diag] mov suc={bid} {ts} tipo='{mtype}' cant={qty} :: {mdesc}",
+                    flush=True,
+                )
     await async_engine.dispose()
 
 
