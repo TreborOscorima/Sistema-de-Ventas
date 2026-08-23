@@ -174,7 +174,7 @@ def import_modal() -> rx.Component:
               ),
               rx.el.tbody(
                 rx.foreach(
-                  State.import_preview_rows,
+                  State.import_preview_display,
                   lambda row: rx.el.tr(
                     rx.el.td(
                       rx.el.span(
@@ -223,6 +223,16 @@ def import_modal() -> rx.Component:
               class_name="min-w-full text-sm",
             ),
             class_name="max-h-52 overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg",
+          ),
+          rx.cond(
+            State.import_preview_hidden_count > 0,
+            rx.el.p(
+              "Mostrando las primeras 200 filas. Se importarán TODAS (",
+              State.import_preview_hidden_count.to_string(),
+              " adicionales no listadas aquí).",
+              class_name="text-xs text-amber-600 mt-1.5 italic",
+            ),
+            rx.fragment(),
           ),
         ),
         rx.fragment(),

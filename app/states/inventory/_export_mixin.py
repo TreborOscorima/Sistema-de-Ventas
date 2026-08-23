@@ -46,8 +46,29 @@ _IMPORT_TEMPLATE_ROWS = [
 ]
 
 
+# Cuántas filas se RENDERIZAN en la tabla de vista previa del import. NO limita
+# la importación (que procesa import_preview_rows completo) — sólo evita pintar
+# miles de filas en el modal. El resto se importa igual.
+IMPORT_PREVIEW_DISPLAY_LIMIT = 200
+
+
 class ExportMixin:
     """Exportación a Excel e importación masiva CSV/Excel de inventario."""
+
+    @rx.var(cache=True)
+    def import_preview_display(self) -> list[dict]:
+        """Subconjunto de import_preview_rows que se muestra en el modal.
+
+        NO limita la importación (confirm_import procesa import_preview_rows
+        completo) — sólo evita pintar miles de filas en el modal.
+        """
+        return self.import_preview_rows[:IMPORT_PREVIEW_DISPLAY_LIMIT]
+
+    @rx.var(cache=True)
+    def import_preview_hidden_count(self) -> int:
+        """Filas válidas que se importarán pero NO se muestran en el preview."""
+        extra = len(self.import_preview_rows) - IMPORT_PREVIEW_DISPLAY_LIMIT
+        return extra if extra > 0 else 0
 
     @rx.event
     def export_inventory_to_excel(self):
@@ -471,7 +492,12 @@ class ExportMixin:
                 "stock_locked": stock_locked,
             })
 
-        self.import_preview_rows = preview[:200]  # Limitar preview a 200 filas
+        # IMPORTANTE: guardar TODAS las filas — confirm_import importa iterando
+        # sobre import_preview_rows, así que recortar acá recortaría la
+        # importación real (bug histórico: archivos >200 filas importaban solo
+        # las primeras 200 en silencio). La vista previa se limita SÓLO para
+        # renderizar, vía la computed var import_preview_display.
+        self.import_preview_rows = preview
         self.import_errors = errors[:50]  # Limitar errores visibles
         self.import_stats = {
             "new": new_count,

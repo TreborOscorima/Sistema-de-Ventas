@@ -116,6 +116,43 @@ def test_inventory_list_denies_without_permission():
 
 
 # ═════════════════════════════════════════════════════════════
+# IMPORTACIÓN MASIVA — separación display vs import (anti-truncado)
+# ═════════════════════════════════════════════════════════════
+
+
+def test_import_preview_display_caps_but_import_keeps_all_rows():
+    """Regresión: archivos con >200 filas deben importarse COMPLETOS.
+
+    Bug histórico: import_preview_rows se recortaba a [:200] y confirm_import
+    itera sobre esa lista → sólo se importaban las primeras 200 filas en
+    silencio (productos de la fila 201+ nunca se creaban). La vista previa se
+    limita SÓLO para renderizar (import_preview_display), no la importación.
+    """
+    state = InventoryState()
+    state.import_preview_rows = [
+        {"barcode": f"B{i:05d}", "description": f"P{i}", "stock": 1}
+        for i in range(356)
+    ]
+
+    # Lo que se IMPORTA (confirm_import itera esto) conserva TODAS las filas.
+    assert len(state.import_preview_rows) == 356
+    # Lo que se MUESTRA en el modal está acotado.
+    assert len(state.import_preview_display) == 200
+    # Y se informa cuántas filas extra se importarán sin mostrarse.
+    assert state.import_preview_hidden_count == 156
+
+
+def test_import_preview_display_no_cap_when_small():
+    state = InventoryState()
+    state.import_preview_rows = [
+        {"barcode": f"B{i}", "description": f"P{i}", "stock": 1} for i in range(40)
+    ]
+
+    assert len(state.import_preview_display) == 40
+    assert state.import_preview_hidden_count == 0
+
+
+# ═════════════════════════════════════════════════════════════
 # BATCHES (lotes con vencimiento) — Farmacia / Supermercado
 # ═════════════════════════════════════════════════════════════
 
