@@ -132,27 +132,42 @@ def _bulk_actions() -> rx.Component:
 
 
 def _qty_stepper(item: rx.Var) -> rx.Component:
+    # Unit-aware: unidades por peso/volumen (kg, L, ml…) aceptan fracciones y se
+    # tipean directamente en el campo (como en el POS); los botones ±1 sólo tienen
+    # sentido en unidades enteras (unidad, caja, paquete…), así que allí se ocultan.
+    _input_base = (
+        "px-1 py-0.5 text-sm text-center font-medium border border-slate-200 "
+        "rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+    )
+    minus_btn = rx.el.button(
+        rx.icon("minus", class_name="h-3.5 w-3.5"),
+        on_click=State.transfer_decrement_qty(item["key"]),
+        type="button",
+        class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']} disabled:opacity-30",
+        disabled=item["quantity"] == "1",
+    )
+    plus_btn = rx.el.button(
+        rx.icon("plus", class_name="h-3.5 w-3.5"),
+        on_click=State.transfer_increment_qty(item["key"]),
+        type="button",
+        class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']}",
+    )
+    qty_input = rx.el.input(
+        type="number",
+        min=rx.cond(item["allows_decimal"], "0.001", "1"),
+        step=rx.cond(item["allows_decimal"], "0.001", "1"),
+        value=item["quantity"],
+        on_change=lambda v, k=item["key"]: State.transfer_update_qty(k, v),
+        class_name=rx.cond(
+            item["allows_decimal"],
+            "w-20 " + _input_base,
+            "w-14 " + _input_base,
+        ),
+    )
     return rx.el.div(
-        rx.el.button(
-            rx.icon("minus", class_name="h-3.5 w-3.5"),
-            on_click=State.transfer_decrement_qty(item["key"]),
-            type="button",
-            class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']} disabled:opacity-30",
-            disabled=item["quantity"] == "1",
-        ),
-        rx.el.input(
-            type="number",
-            min="1",
-            value=item["quantity"],
-            on_change=lambda v, k=item["key"]: State.transfer_update_qty(k, v),
-            class_name="w-14 px-1 py-0.5 text-sm text-center font-medium border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-        ),
-        rx.el.button(
-            rx.icon("plus", class_name="h-3.5 w-3.5"),
-            on_click=State.transfer_increment_qty(item["key"]),
-            type="button",
-            class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']}",
-        ),
+        rx.cond(item["allows_decimal"], rx.fragment(), minus_btn),
+        qty_input,
+        rx.cond(item["allows_decimal"], rx.fragment(), plus_btn),
         class_name="flex items-center gap-0.5",
     )
 

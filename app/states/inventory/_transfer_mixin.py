@@ -78,6 +78,7 @@ class TransferMixin:
             "stock": self._fmt_stock(p.stock, p.unit),
             "full_qty": self._full_stock_qty(p.stock, p.unit),
             "unit": p.unit,
+            "allows_decimal": self._unit_allows_decimal(p.unit),
         }
 
     def _variant_row(self, p, v) -> Dict[str, Any]:
@@ -92,6 +93,7 @@ class TransferMixin:
             "stock": self._fmt_stock(v.stock, p.unit),
             "full_qty": self._full_stock_qty(v.stock, p.unit),
             "unit": p.unit,
+            "allows_decimal": self._unit_allows_decimal(p.unit),
         }
 
     def _add_or_inc_row(self, row: Dict[str, Any]):
@@ -119,6 +121,7 @@ class TransferMixin:
                 "description": row["description"],
                 "available_stock": row["stock"],
                 "unit": row["unit"],
+                "allows_decimal": row["allows_decimal"],
                 "quantity": "1",
             },
         ]
@@ -349,6 +352,7 @@ class TransferMixin:
                 "description": r["description"],
                 "available_stock": r["full_qty"],
                 "unit": r["unit"],
+                "allows_decimal": r["allows_decimal"],
                 "quantity": r["full_qty"],
             }
             for r in rows
