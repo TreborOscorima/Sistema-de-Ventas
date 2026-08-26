@@ -525,6 +525,8 @@ def ingreso_page() -> rx.Component:
         ),
         rx.el.input(
             type="number",
+            min="0",
+            step="0.001",
             key=State.entry_form_key.to_string() + "_qty",
             on_blur=lambda val: State.handle_entry_change("quantity", val),
             on_key_down=lambda key: State.handle_entry_field_keydown(key),

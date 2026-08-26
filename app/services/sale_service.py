@@ -45,7 +45,7 @@ from sqlalchemy import func, or_, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
-from app.constants import CASHBOX_INCOME_ACTIONS
+from app.constants import CASHBOX_INCOME_ACTIONS, QUANTITY_DISPLAY_QUANT
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
 from app.i18n import MSG
 from app.models import (
@@ -83,8 +83,10 @@ from app.utils.timezone import format_local_datetime, utc_now_naive
 
 # Nota: get_session es un alias de get_async_session para uso interno.
 
-QTY_DECIMAL_QUANT = Decimal("0.0001")
-QTY_DISPLAY_QUANT = Decimal("0.01")
+QTY_DECIMAL_QUANT = Decimal("0.0001")  # Precisión de escritura a BD (Numeric(18,4)).
+# Precisión de visualización de cantidades (recibos/celdas): 1 g / 1 ml. Fuente única
+# en app.constants para no divergir de _normalize_quantity_value en los states.
+QTY_DISPLAY_QUANT = QUANTITY_DISPLAY_QUANT
 QTY_INTEGER_QUANT = Decimal("1")
 
 logger = get_logger("SaleService")

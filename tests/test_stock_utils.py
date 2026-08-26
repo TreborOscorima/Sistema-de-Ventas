@@ -243,3 +243,42 @@ def test_adjustment_handles_none_and_bad_values():
     # valor no parseable => tratado como 0 (sin excepción)
     mov2 = _adj("", 3)
     assert mov2 is not None and mov2.quantity == Decimal("3")
+
+
+class TestQuantityDisplayResolution:
+    """Resolución de cantidad para unidades decimales: 1 g / 1 ml (0.001)."""
+
+    def test_constant_is_gram_ml_resolution(self):
+        from app.constants import QUANTITY_DISPLAY_QUANT
+
+        assert QUANTITY_DISPLAY_QUANT == Decimal("0.001")
+
+    def _stub_state(self):
+        # MixinState importa reflex; garantizamos el env mínimo antes.
+        import os
+
+        os.environ.setdefault(
+            "AUTH_SECRET_KEY", "test-secret-key-quantity-normalize-32chars"
+        )
+        os.environ.setdefault("TENANT_STRICT", "0")
+        from app.states.mixin_state import MixinState
+
+        class _StubState:
+            decimal_units = {"kg", "l", "ml", "g", "m", "cm"}
+            _unit_allows_decimal = MixinState._unit_allows_decimal
+            _normalize_quantity_value = MixinState._normalize_quantity_value
+
+        return _StubState()
+
+    def test_unidad_decimal_preserva_gramos_y_ml(self):
+        s = self._stub_state()
+        # 253 g de pollo y 375 ml de aceite vendidos por kg / L: exactos.
+        assert s._normalize_quantity_value(0.253, "kg") == 0.253
+        assert s._normalize_quantity_value(0.375, "l") == 0.375
+        assert s._normalize_quantity_value(0.095, "ml") == 0.095
+
+    def test_unidad_entera_redondea_a_entero(self):
+        s = self._stub_state()
+        result = s._normalize_quantity_value(2.6, "unidad")
+        assert result == 3
+        assert isinstance(result, int)

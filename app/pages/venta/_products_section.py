@@ -230,8 +230,8 @@ def quick_add_bar() -> rx.Component:
                 rx.el.label("Cant.", class_name="text-xs text-slate-500 sm:hidden"),
                 rx.el.input(
                     type="number",
-                    min="0.01",
-                    step="0.01",
+                    min="0.001",
+                    step="0.001",
                     key=State.sale_form_key.to_string() + "_qty",
                     default_value=State.new_sale_item["quantity"].to_string(),
                     on_blur=lambda val: State.handle_sale_change("quantity", val),

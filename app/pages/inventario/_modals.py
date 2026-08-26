@@ -571,7 +571,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 rx.el.p("Diferencia detectada (+ingreso / −egreso)", class_name="text-xs text-slate-400 mb-1"),
                 rx.el.input(
                   type="number",
-                  step="0.01",
+                  step="0.001",
                   default_value=State.inventory_adjustment_item["adjust_quantity"].to_string(),
                   on_blur=lambda value: State.handle_inventory_adjustment_change("adjust_quantity", value),
                   class_name=INPUT_STYLES["default"],

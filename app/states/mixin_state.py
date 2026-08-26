@@ -46,7 +46,13 @@ from typing import List, Dict, Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 
-from app.constants import DEFAULT_RECEIPT_WIDTH, MIN_RECEIPT_WIDTH, MAX_RECEIPT_WIDTH, DEFAULT_PAPER_WIDTH_MM
+from app.constants import (
+    DEFAULT_RECEIPT_WIDTH,
+    MIN_RECEIPT_WIDTH,
+    MAX_RECEIPT_WIDTH,
+    DEFAULT_PAPER_WIDTH_MM,
+    QUANTITY_DISPLAY_QUANT,
+)
 from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.payment import normalize_wallet_label, payment_category
 from app.utils.timezone import (
@@ -896,9 +902,13 @@ class MixinState:
         return unit and unit.lower() in self.decimal_units
 
     def _normalize_quantity_value(self, value: float, unit: str) -> float:
+        # Unidades con decimales (kg, g, L, ml, m, cm): resolución de 1 g / 1 ml
+        # (QUANTITY_DISPLAY_QUANT = 0.001). Unidades enteras (Unidad, caja…): entero.
         if self._unit_allows_decimal(unit):
             return float(
-                Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                Decimal(str(value or 0)).quantize(
+                    QUANTITY_DISPLAY_QUANT, rounding=ROUND_HALF_UP
+                )
             )
         return int(
             Decimal(str(value or 0)).quantize(

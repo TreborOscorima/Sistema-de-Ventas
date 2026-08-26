@@ -65,8 +65,23 @@ class TestDecimalHelpers:
         assert result == Decimal("2.5555")
 
     def test_round_quantity_display_mode(self):
+        # Visualización a 3 decimales (1 g / 1 ml), no a centésimas.
         result = _round_quantity(Decimal("2.5555"), allows_decimal=True, display=True)
-        assert result == Decimal("2.56")
+        assert result == Decimal("2.556")
+
+    def test_round_quantity_display_gramo_ml_preserved(self):
+        # Los ejemplos reales del negocio (venta al peso/volumen) no se redondean
+        # a 0,01: 253 g de pollo y 375 ml de aceite sobreviven exactos.
+        assert _round_quantity(Decimal("0.253"), allows_decimal=True, display=True) == Decimal("0.253")
+        assert _round_quantity(Decimal("0.375"), allows_decimal=True, display=True) == Decimal("0.375")
+        assert _round_quantity(Decimal("0.095"), allows_decimal=True, display=True) == Decimal("0.095")
+
+    def test_display_quant_is_single_source(self):
+        # QTY_DISPLAY_QUANT delega en la fuente única de app.utils.stock.
+        from app.services.sale_service import QTY_DISPLAY_QUANT
+        from app.constants import QUANTITY_DISPLAY_QUANT
+
+        assert QTY_DISPLAY_QUANT == QUANTITY_DISPLAY_QUANT == Decimal("0.001")
 
 
 class TestSaleItemDTO:

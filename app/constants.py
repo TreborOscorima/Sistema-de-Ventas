@@ -6,6 +6,8 @@ Aquí se re-exportan para compatibilidad y se agregan las específicas de Ventas
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 # ── Re-export de constantes de plataforma ────────────────────────────────────
 from tuwayki_core.constants import (  # noqa: F401
     WHATSAPP_NUMBER,
@@ -42,6 +44,18 @@ from tuwayki_core.constants import (  # noqa: F401
     CASHBOX_EXPENSE_ACTIONS,
     MAX_REPORT_ROWS,
 )
+
+
+# =============================================================================
+# CANTIDADES — resolución decimal de la UI/visualización
+# =============================================================================
+# La BD guarda 4 decimales (Numeric(18,4)); en pantalla/recibos/carrito/ajustes
+# fijamos 3 decimales = precisión de 1 gramo / 1 ml para las unidades que permiten
+# decimales (kg, g, L, ml, m, cm), suficiente para vender/ingresar/ajustar al peso o
+# volumen (ej. 0,253 kg de pollo, 0,375 L de aceite). NO afecta el redondeo monetario,
+# que sigue en centavos. Fuente única: la usan _normalize_quantity_value (states) y
+# QTY_DISPLAY_QUANT (sale_service) para no volver a divergir.
+QUANTITY_DISPLAY_QUANT: Decimal = Decimal("0.001")
 
 
 # =============================================================================

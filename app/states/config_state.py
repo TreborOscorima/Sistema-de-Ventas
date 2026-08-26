@@ -1337,12 +1337,8 @@ class ConfigState(MixinState):
     def _unit_allows_decimal(self, unit: str) -> bool:
         return unit and unit.lower() in self.decimal_units
 
-    def _normalize_quantity_value(self, value: float, unit: str) -> float:
-        if self._unit_allows_decimal(unit):
-            return float(
-                Decimal(str(value or 0)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
-            )
-        return float(int(value))
+    # _normalize_quantity_value se hereda de MixinState (fuente única, resolución
+    # QUANTITY_DISPLAY_QUANT). Antes había una copia local que ya había divergido.
 
     @rx.event
     def set_new_unit_name(self, value: str):

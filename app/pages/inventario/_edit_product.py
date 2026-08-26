@@ -88,6 +88,8 @@ def edit_product_modal() -> rx.Component:
                 ),
                 rx.el.input(
                   type="number",
+                  min="0",
+                  step="0.001",
                   default_value=State.editing_product["stock"].to_string(),
                   on_blur=lambda v: State.handle_edit_product_change("stock", v),
                   class_name=INPUT_STYLES["default"],
@@ -364,6 +366,8 @@ def edit_product_modal() -> rx.Component:
                   ),
                   rx.el.input(
                     type="number",
+                    min="0",
+                    step="0.001",
                     placeholder="0",
                     default_value=row["stock"].to_string(),
                     on_blur=lambda v, index=row["index"]: State.update_variant_field(
@@ -505,6 +509,8 @@ def edit_product_modal() -> rx.Component:
                   ),
                   rx.el.input(
                     type="number",
+                    min="0",
+                    step="0.001",
                     placeholder="0",
                     default_value=row["stock"].to_string(),
                     on_blur=lambda v, index=row["index"]: State.update_batch_field(
