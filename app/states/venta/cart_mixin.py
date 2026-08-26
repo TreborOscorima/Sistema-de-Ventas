@@ -64,6 +64,12 @@ class CartMixin:
     autocomplete_suggestions: List[str] = []
     autocomplete_results: List[Dict[str, Any]] = []
     autocomplete_selected_index: int = -1
+    # Texto MOSTRADO en el buscador de productos. Va desacoplado de lo que se
+    # tipea: el input (debounce_input) lleva su propio estado local mientras se
+    # escribe; este var solo cambia al SELECCIONAR/ESCANEAR/LIMPIAR. Así el
+    # eco tardío del servidor nunca pisa las letras recién tipeadas (evita el
+    # "se come una letra" al escribir rápido).
+    product_search_display: str = ""
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
     product_grid_items: List[Dict[str, Any]] = []
@@ -432,6 +438,7 @@ class CartMixin:
         self.new_sale_item["variant_id"] = variant_id
         self.new_sale_item["barcode"] = product_barcode
         self.new_sale_item["description"] = description
+        self.product_search_display = description
         self.new_sale_item["category"] = category
         self.new_sale_item["unit"] = unit
         self.new_sale_item["quantity"] = self._normalize_quantity_value(
@@ -997,6 +1004,7 @@ class CartMixin:
 
     def _reset_sale_form(self):
         self.sale_form_key += 1
+        self.product_search_display = ""
         self.new_sale_item = {
             "temp_id": "",
             "barcode": "",
@@ -1096,6 +1104,7 @@ class CartMixin:
                 if not value or not str(value).strip():
                     self.new_sale_item["barcode"] = ""
                     self.new_sale_item["description"] = ""
+                    self.product_search_display = ""
                     self.new_sale_item["quantity"] = 0
                     self.new_sale_item["price"] = 0
                     self.new_sale_item["subtotal"] = "0.00"
@@ -1169,6 +1178,7 @@ class CartMixin:
 
         if not barcode_value or not str(barcode_value).strip():
             self.new_sale_item["description"] = ""
+            self.product_search_display = ""
             self.new_sale_item["quantity"] = 0
             self.new_sale_item["price"] = 0
             self.new_sale_item["subtotal"] = "0.00"

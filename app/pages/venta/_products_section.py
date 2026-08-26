@@ -176,7 +176,13 @@ def quick_add_bar() -> rx.Component:
                     rx.debounce_input(
                         rx.input(
                             id="venta_search_input",
-                            value=State.new_sale_item["description"],
+                            # value ligado a un var de DISPLAY que NO cambia por
+                            # cada tecla (solo al seleccionar/escanear/limpiar).
+                            # Así el eco tardío del backend nunca reescribe lo que
+                            # se está tipeando → no "se come" letras al escribir
+                            # rápido. El texto en curso lo maneja el estado local
+                            # del propio debounce_input.
+                            value=State.product_search_display,
                             on_change=lambda val: State.handle_sale_change("description", val),
                             on_key_down=State.handle_autocomplete_keydown,
                             placeholder="Buscar producto (F6)...",
