@@ -1722,7 +1722,7 @@ class HistorialState(MixinState):
                 items_summary = []
                 for ri in (ret.items or []):
                     pname = prod_name_map.get(ri.product_id, "Producto") if ri.product_id else "Producto"
-                    items_summary.append(f"{pname} x{int(ri.quantity or 0)}")
+                    items_summary.append(f"{pname} x{fmt_input_num(ri.quantity or 0)}")
                 returns_list.append({
                     "timestamp": self._format_company_datetime(ret.timestamp) if ret.timestamp else "",
                     "reason": reason_label,

@@ -80,6 +80,7 @@ from reportlab.pdfgen import canvas
 
 from app.constants import DEFAULT_RECEIPT_WIDTH, MIN_RECEIPT_WIDTH, MAX_RECEIPT_WIDTH
 from app.utils.formatting import format_currency as format_currency_screen
+from app.utils.formatting import fmt_input_num
 
 
 class ReceiptService:
@@ -458,7 +459,7 @@ class ReceiptService:
             display_unit_price = base_f if has_discount else price_f
             display_subtotal = base_f * float(item["quantity"]) if has_discount else float(item["subtotal"])
             left_text = (
-                f"{item['quantity']} {item['unit']} x "
+                f"{fmt_input_num(item['quantity'])} {item['unit']} x "
                 f"{currency_formatter(display_unit_price, currency_symbol)}"
             )
             right_text = currency_formatter(display_subtotal, currency_symbol)

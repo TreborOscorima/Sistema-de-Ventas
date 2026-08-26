@@ -717,7 +717,9 @@ def generate_sales_report(
             "total": Decimal(str(_ct or 0)),
             "cost": Decimal(str(_cc or 0)),
             "discount": Decimal(str(_cd_disc or 0)),
-            "qty": int(_qty or 0),
+            # Cantidad como Decimal (no int): productos por peso/volumen (kg, L…)
+            # venden fracciones; int() truncaría 0,753 kg → 0.
+            "qty": _safe_decimal(_qty),
         }
 
     # ── 5. Por método de pago (SQL GROUP BY sobre SalePayment JOIN Sale) ─────
@@ -749,7 +751,8 @@ def generate_sales_report(
         {
             "name": _r[0] or "Producto sin nombre",
             "category": _r[1],
-            "qty": int(_r[2] or 0),
+            # Decimal, no int: no truncar ventas por peso/volumen.
+            "qty": _safe_decimal(_r[2]),
             "total": Decimal(str(_r[3] or 0)),
             "cost": Decimal(str(_r[4] or 0)),
             "transactions": _r[5] or 0,
@@ -1058,7 +1061,7 @@ def generate_sales_report(
         _cat_dev = dev_by_cat.get(cat_name, Decimal("0"))
         _cat_cost_net = max(Decimal("0"), cat_data["cost"] - dev_cost_by_cat.get(cat_name, Decimal("0")))
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
-        ws_category.cell(row=row, column=2, value=cat_data["qty"])
+        ws_category.cell(row=row, column=2, value=cat_data["qty"]).number_format = _quantity_format(cat_data["qty"])
         ws_category.cell(row=row, column=3, value=cat_data["total"]).number_format = currency_format
         ws_category.cell(row=row, column=4, value=cat_data.get("discount", Decimal("0"))).number_format = currency_format
         # (-) Devoluciones
@@ -1083,7 +1086,7 @@ def generate_sales_report(
     cat_totals_row = row
     _add_totals_row_with_formulas(ws_category, cat_totals_row, cat_data_start, [
         {"type": "label", "value": "TOTALES"},
-        {"type": "sum", "col_letter": "B"},
+        {"type": "sum", "col_letter": "B", "number_format": NUMBER_FORMAT},
         {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "sum", "col_letter": "D", "number_format": currency_format},
         {"type": "sum", "col_letter": "E", "number_format": currency_format},
@@ -1548,12 +1551,12 @@ def generate_sales_report(
     for prod in sorted_products:
         _pn_key = prod["name"] or ""
         _dev_qty_p, _dev_rev_p = dev_by_product.get(_pn_key, (Decimal("0"), Decimal("0")))
-        _net_qty_p = max(0, prod["qty"] - int(_dev_qty_p))
+        _net_qty_p = max(Decimal("0"), prod["qty"] - _dev_qty_p)
         _net_rev_p = max(Decimal("0"), prod["total"] - _dev_rev_p)
         _net_cost_p = max(Decimal("0"), prod["cost"] - dev_cost_by_product.get(_pn_key, Decimal("0")))
         ws_top_products.cell(row=row, column=1, value=_safe_string(prod["name"][:50]))
         ws_top_products.cell(row=row, column=2, value=_safe_string(prod["category"]))
-        ws_top_products.cell(row=row, column=3, value=_net_qty_p)
+        ws_top_products.cell(row=row, column=3, value=_net_qty_p).number_format = _quantity_format(_net_qty_p)
         ws_top_products.cell(row=row, column=4, value=prod["transactions"])
         ws_top_products.cell(row=row, column=5, value=_net_rev_p).number_format = currency_format
         ws_top_products.cell(row=row, column=6, value=_net_cost_p).number_format = currency_format
@@ -1571,7 +1574,7 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_top_products, top_totals_row, top_data_start, [
         {"type": "label", "value": "TOTALES TOP 20"},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "C"},
+        {"type": "sum", "col_letter": "C", "number_format": NUMBER_FORMAT},
         {"type": "sum", "col_letter": "D"},
         {"type": "sum", "col_letter": "E", "number_format": currency_format},
         {"type": "sum", "col_letter": "F", "number_format": currency_format},
