@@ -600,7 +600,7 @@ class CartMixin:
                     from app.models.inventory import ProductVariant as _PV
                     pv = await session.get(_PV, vid)
                     if pv:
-                        label += f" ({' '.join(filter(None, [pv.size, pv.color]))})"
+                        label += f" ({pv.label(sku_fallback=False, default='')})"
                 if float(available or 0) < needed + in_cart:
                     return rx.toast(
                         f"Stock insuficiente de '{label}' para armar el kit.",

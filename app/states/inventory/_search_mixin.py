@@ -148,7 +148,7 @@ class SearchMixin:
     def _inventory_row_from_variant(
         self, product: Product, variant: ProductVariant, is_kit: bool = False
     ) -> Dict[str, Any]:
-        label = self._variant_label(variant)
+        label = variant.label()
         description = product.description or ""
         if label:
             description = f"{description} ({label})"
@@ -728,17 +728,3 @@ class SearchMixin:
         self.inventory_current_page = 1
         self._refresh_inventory_cache()
 
-    def _variant_label(self, variant: ProductVariant) -> str:
-        parts: List[str] = []
-        if variant.size:
-            parts.append(str(variant.size).strip())
-        if variant.color:
-            parts.append(str(variant.color).strip())
-        label = " ".join([p for p in parts if p])
-        # El SKU/código de barras NO va en el label visible (evita mostrar
-        # "42 Negro (uuid)" en inventario); queda solo como fallback si la
-        # variante no tiene talla ni color. El código se muestra aparte.
-        if label:
-            return label
-        sku = (variant.sku or "").strip()
-        return sku or "Variante"

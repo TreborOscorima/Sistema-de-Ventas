@@ -118,15 +118,6 @@ def _apply_tenant_filters(query, model, company_id: int | None, branch_id: int |
     query = _apply_company_filter(query, model, company_id)
     return _apply_branch_filter(query, model, branch_id)
 
-def _variant_label(variant: ProductVariant) -> str:
-    parts = []
-    if variant.size:
-        parts.append(str(variant.size).strip())
-    if variant.color:
-        parts.append(str(variant.color).strip())
-    return " ".join([p for p in parts if p])
-
-
 def _normalize_cashbox_action(action: str | None) -> str:
     value = (action or "").replace("_", " ").strip()
     if not value:
@@ -312,7 +303,7 @@ def _adapt_variant_payload(
     global_margin: float = 0.0,
 ) -> dict[str, Any]:
     from app.utils.pricing import resolve_effective_price
-    label = _variant_label(variant)
+    label = variant.label(sku_fallback=False, default="")
     description = parent.description
     if label:
         description = f"{parent.description} ({label})"
@@ -2549,7 +2540,7 @@ class SaleService:
                 barcode_snapshot = (
                     variant.sku if variant else product.barcode
                 )
-                variant_label = _variant_label(variant) if variant else ""
+                variant_label = variant.label(sku_fallback=False, default="") if variant else ""
                 name_snapshot = product.description
                 if variant_label:
                     name_snapshot = f"{product.description} ({variant_label})"

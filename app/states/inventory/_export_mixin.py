@@ -122,21 +122,13 @@ class ExportMixin:
                 .options(selectinload(Product.variants))
             ).all()
 
-        def _variant_label(variant: ProductVariant) -> str:
-            parts: list[str] = []
-            if variant.size:
-                parts.append(str(variant.size).strip())
-            if variant.color:
-                parts.append(str(variant.color).strip())
-            return " ".join([p for p in parts if p]).strip()
-
         _exp_gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
         export_rows: list[dict[str, Any]] = []
         for product in products:
             variants = list(product.variants or [])
             if variants:
                 for variant in variants:
-                    label = _variant_label(variant)
+                    label = variant.label(sku_fallback=False, default="")
                     description = product.description or "Sin descripción"
                     if label:
                         description = f"{description} ({label})"

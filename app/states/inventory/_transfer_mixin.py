@@ -81,7 +81,7 @@ class TransferMixin:
         }
 
     def _variant_row(self, p, v) -> Dict[str, Any]:
-        label = " / ".join(x for x in (v.size, v.color) if x) or (v.sku or "")
+        label = v.label(sep=" / ", default="")
         return {
             "id": p.id,
             "key": f"{p.id}:{v.id}",

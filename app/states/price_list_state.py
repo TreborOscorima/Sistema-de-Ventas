@@ -162,8 +162,7 @@ class PriceListState(MixinState):
                         .where(ProductVariant.branch_id == branch_id)
                     ).first()
                     if v:
-                        parts = [v.size, v.color]
-                        variant_desc = " / ".join(x for x in parts if x)
+                        variant_desc = v.label(sep=" / ", sku_fallback=False, default="")
 
                 unit_price_f = float(item.unit_price or 0)
                 diff_display = ""
@@ -525,8 +524,7 @@ class PriceListState(MixinState):
                 parent = parents.get(v.product_id)
                 if not parent:
                     continue
-                parts = [s for s in [v.size, v.color] if s]
-                variant_label = " / ".join(parts) if parts else v.sku
+                variant_label = v.label(sep=" / ", default="")
                 results.append({
                     "id": str(v.product_id),
                     "variant_id": str(v.id),

@@ -267,7 +267,7 @@ class ProductMixin:
                         variant = variant_map.get(c.component_variant_id) if c.component_variant_id else None
                         if variant:
                             display_barcode = variant.sku or ""
-                            variant_label = " ".join(filter(None, [variant.size, variant.color]))
+                            variant_label = variant.label(sku_fallback=False, default="")
                         else:
                             display_barcode = (prod.barcode or "") if prod else ""
                             variant_label = ""
@@ -810,7 +810,7 @@ class ProductMixin:
             parent = session.exec(
                 select(Product).where(Product.id == variant.product_id)
             ).first()
-            variant_label = " ".join(filter(None, [variant.size, variant.color]))
+            variant_label = variant.label(sku_fallback=False, default="")
             comps = list(self.kit_components)
             row = dict(comps[index])
             row["component_barcode"] = variant.sku or ""

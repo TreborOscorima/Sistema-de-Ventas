@@ -465,17 +465,6 @@ class IngresoState(MixinState):
         keywords = ("farmacia", "farmaceut", "medic", "botica", "drog")
         return any(keyword in value for keyword in keywords)
 
-    def _variant_label(self, variant: ProductVariant) -> str:
-        parts: List[str] = []
-        if variant.size:
-            parts.append(str(variant.size).strip())
-        if variant.color:
-            parts.append(str(variant.color).strip())
-        label = " ".join([p for p in parts if p])
-        if label:
-            return label
-        sku = (variant.sku or "").strip()
-        return sku or "Variante"
 
     def _load_variants_for_product(self, product_id: int | None):
         self.variants_list = []
@@ -503,7 +492,7 @@ class IngresoState(MixinState):
         self.variants_list = [
             {
                 "id": str(variant.id),
-                "label": self._variant_label(variant),
+                "label": variant.label(),
             }
             for variant in variants
         ]
@@ -1290,7 +1279,7 @@ class IngresoState(MixinState):
                         )
                         session.add(movement)
 
-                    variant_label = self._variant_label(variant) if variant else ""
+                    variant_label = variant.label() if variant else ""
                     description_snapshot = (
                         product.description if product else description
                     )

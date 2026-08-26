@@ -129,7 +129,7 @@ class AdjustmentMixin:
         barcode = variant.sku if variant else _field(product, "barcode", "")
         description = _field(product, "description", "")
         if variant:
-            label = self._variant_label(variant)
+            label = variant.label()
             if label:
                 description = f"{description} ({label})"
         self.inventory_adjustment_item["barcode"] = barcode or ""
@@ -363,7 +363,7 @@ class AdjustmentMixin:
                 }
             )
         for variant, parent in variant_rows:
-            label = self._variant_label(variant)
+            label = variant.label()
             full_label = parent.description
             if label:
                 full_label = f"{parent.description} ({label})"
@@ -513,7 +513,7 @@ class AdjustmentMixin:
             if not item_copy.get("barcode"):
                 item_copy["barcode"] = variant.sku if variant else product.barcode
             if not item_copy.get("description"):
-                label = self._variant_label(variant) if variant else ""
+                label = variant.label() if variant else ""
                 item_copy["description"] = (
                     f"{product.description} ({label})" if label else product.description
                 )

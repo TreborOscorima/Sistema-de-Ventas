@@ -305,8 +305,7 @@ class PromotionsState(MixinState):
                 parent = parents.get(v.product_id)
                 if not parent:
                     continue
-                parts = [s for s in [v.size, v.color] if s]
-                variant_label = " / ".join(parts) if parts else v.sku
+                variant_label = v.label(sep=" / ", default="")
                 desc = f"{parent.description} — {variant_label}"
                 products.append({
                     "id": v.product_id,

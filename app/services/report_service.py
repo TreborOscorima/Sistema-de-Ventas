@@ -1705,14 +1705,6 @@ def generate_inventory_report(
     if not include_zero_stock:
         query = query.where(Product.stock > 0)
 
-    def _variant_label(variant: Any) -> str:
-        parts: list[str] = []
-        if getattr(variant, "size", None):
-            parts.append(str(variant.size).strip())
-        if getattr(variant, "color", None):
-            parts.append(str(variant.color).strip())
-        return " ".join([p for p in parts if p]).strip()
-
     # Margen global de la empresa para resolver precios sin sale_price explícito
     _global_margin = 0.0
     if company_id:
@@ -1730,7 +1722,7 @@ def generate_inventory_report(
                 stock = _safe_decimal(getattr(variant, "stock", 0))
                 if not include_zero_stock and stock <= 0:
                     continue
-                label = _variant_label(variant)
+                label = variant.label(sku_fallback=False, default="")
                 description = _safe_string(product.description, "Sin descripción")
                 if label:
                     description = f"{description} ({label})"

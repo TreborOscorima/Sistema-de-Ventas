@@ -184,6 +184,37 @@ class ProductVariant(TenantMixin, SQLModel, table=True):
     price_tiers: List["PriceTier"] = Relationship(back_populates="product_variant")
     sale_items: List["SaleItem"] = Relationship(back_populates="product_variant")
 
+    def label(
+        self,
+        *,
+        sep: str = " ",
+        sku_fallback: bool = True,
+        default: str = "Variante",
+    ) -> str:
+        """Etiqueta visible de la variante (talla/color) — fuente única de verdad.
+
+        Reemplaza las copias dispersas de `_variant_label`. El SKU/código NUNCA
+        se anexa al label (iba antes como "42 Negro (uuid)"); se muestra aparte
+        en su columna. Args:
+        - sep: separador entre talla y color (" " en inventario/ingreso/ventas,
+          " / " en transferencias).
+        - sku_fallback: si no hay talla ni color, usar el SKU antes que `default`.
+        - default: valor final si no hay talla/color ni (con sku_fallback) SKU.
+        """
+        parts = [
+            str(x).strip()
+            for x in (self.size, self.color)
+            if x and str(x).strip()
+        ]
+        label = sep.join(parts)
+        if label:
+            return label
+        if sku_fallback:
+            sku = (self.sku or "").strip()
+            if sku:
+                return sku
+        return default
+
 
 class ProductBatch(TenantMixin, SQLModel, table=True):
     """Lotes con vencimiento (FEFO)."""
