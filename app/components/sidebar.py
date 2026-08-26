@@ -698,7 +698,8 @@ def print_prefs_modal() -> rx.Component:
                     rx.el.div(
                         rx.el.input(
                             placeholder="Ej: 76",
-                            type="number",
+                            type="text",
+                            input_mode="numeric",
                             value=State.profile_receipt_paper_custom_mm,
                             on_change=State.set_profile_receipt_paper_custom_mm,
                             class_name=INPUT_STYLES["default"],

@@ -6,7 +6,12 @@ assets/exports/
 .web
 .web/
 .states/
-reflex.lock/
+reflex.lock/*
+# Excepción: versionamos los lockfiles persistidos de Reflex para builds
+# reproducibles (y para que el override de es-toolkit ^1.48.0 —fix del bug de
+# recharts/compat CJS— llegue a producción). Ver scripts/docker-entrypoint.sh.
+!reflex.lock/package.json
+!reflex.lock/bun.lock
 __pycache__/
 /app/__pycache__/
 .env

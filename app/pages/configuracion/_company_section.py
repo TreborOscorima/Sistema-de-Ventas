@@ -238,7 +238,8 @@ def company_settings_section() -> rx.Component:
             rx.el.div(
               rx.el.input(
                 placeholder="Ej: 76",
-                type="number",
+                type="text",
+                input_mode="numeric",
                 value=State.receipt_paper_custom_mm,
                 on_change=State.set_receipt_paper_custom_mm,
                 class_name=INPUT_STYLES["default"],

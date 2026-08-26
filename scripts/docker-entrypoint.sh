@@ -97,147 +97,21 @@ SURFACE="${APP_SURFACE:-all}"
 info "Superficie: ${SURFACE}"
 info "Iniciando Reflex: $*"
 
-# ─── 4b. Pre-init + patch es-toolkit (Rolldown CJS fix) ──────────────────────
-# Reflex 0.9.3 genera vite.config.js con estoolkitAlias() que resuelve
-# 'es-toolkit/compat/X' → './es-toolkit-shims/X.js'. Esos archivos se crean
-# arriba (sección "Crear es-toolkit-shims"), DESPUÉS de reflex init que borra .web/.
+# ─── 4b. Pre-inicialización del frontend ─────────────────────────────────────
+# Nota histórica (es-toolkit): recharts importa los subpaths
+# es-toolkit/compat/{get,sortBy,range,omit,maxBy,...}. Hasta es-toolkit 1.47.0
+# esos subpaths se exportaban SOLO como CJS (./compat/*.js), lo que rompía el
+# bundler de Reflex (Vite/Rolldown envolvía el CJS y colisionaba con
+# "TypeError: t is not a function"). Antes esto se sorteaba con ~240 líneas de
+# shims + parche al export map de node_modules.
 #
-# El patch de node_modules es un segundo nivel de defensa: además de los shims,
-# parchea es-toolkit/package.json añadiendo "import" condition para que Rolldown
-# resuelva vía ESM cuando los shims no están disponibles.
-#
-# Causa raíz: recharts importa es-toolkit/compat/sortBy (y ~10 subpaths más).
-# El export map sólo tiene "default" → ./compat/*.js (CJS). Rolldown envuelve
-# cada CJS con __commonJS factory; la naming collision en el factory
-# (var t=n((e=>{var t=t()...)) causa TypeError: t is not a function.
+# Fix definitivo: es-toolkit ≥1.48.0 publica ./compat/*.mjs (ESM nativo) —justo
+# los subpaths que recharts usa—, así que basta pinnear "es-toolkit": "^1.48.0"
+# en el bloque "overrides" de reflex.lock/package.json (mecanismo soportado por
+# Reflex: lo arrastra a .web/package.json en cada compile). Ya NO se parchea nada
+# acá. Reflex 0.9.8 tampoco genera estoolkitAlias(), así que no quedan shims.
 info "Pre-inicializando frontend (reflex init)..."
 reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error — continuando"
-
-# ── Crear es-toolkit-shims DESPUÉS de reflex init ────────────────────────────
-# reflex init llama a copy_tree() que borra todo .web/ y copia la plantilla.
-# La plantilla de Reflex 0.9.3 genera un vite.config.js con estoolkitAlias()
-# que resuelve 'es-toolkit/compat/X' → './es-toolkit-shims/X.js'. Si esos
-# archivos no existen, Vite falla y los chunks quedan rotos (→ loop infinito).
-# Los creamos aquí, después de reflex init (que borra .web/), para que
-# sobrevivan hasta que vite build los consuma.
-info "Creando es-toolkit-shims para Vite..."
-mkdir -p /app/.web/es-toolkit-shims
-cat > /app/.web/es-toolkit-shims/get.js          << 'EOF'
-export { get as default } from '../node_modules/es-toolkit/dist/compat/object/get.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/sortBy.js       << 'EOF'
-export { sortBy as default } from '../node_modules/es-toolkit/dist/compat/array/sortBy.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/omit.js         << 'EOF'
-export { omit as default } from '../node_modules/es-toolkit/dist/compat/object/omit.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/range.js        << 'EOF'
-export { range as default } from '../node_modules/es-toolkit/dist/compat/math/range.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/throttle.js     << 'EOF'
-export { throttle as default } from '../node_modules/es-toolkit/dist/compat/function/throttle.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/maxBy.js        << 'EOF'
-export { maxBy as default } from '../node_modules/es-toolkit/dist/compat/math/maxBy.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/sumBy.js        << 'EOF'
-export { sumBy as default } from '../node_modules/es-toolkit/dist/compat/math/sumBy.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/isPlainObject.js << 'EOF'
-export { isPlainObject as default } from '../node_modules/es-toolkit/dist/compat/predicate/isPlainObject.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/minBy.js        << 'EOF'
-export { minBy as default } from '../node_modules/es-toolkit/dist/compat/math/minBy.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/last.js         << 'EOF'
-export { last as default } from '../node_modules/es-toolkit/dist/compat/array/last.mjs';
-EOF
-cat > /app/.web/es-toolkit-shims/uniqBy.js       << 'EOF'
-export { uniqBy as default } from '../node_modules/es-toolkit/dist/compat/array/uniqBy.mjs';
-EOF
-ok "es-toolkit-shims creados (11 archivos)"
-
-# ── Escribir patch script al volumen .web/ (persiste entre reinicios) ─────────
-# reflex run instala node_modules DESPUÉS de arrancar (bun install interno).
-# El patch debe correr en background mientras reflex init+compile se ejecutan,
-# ANTES de que el Vite production build empiece (~60-90s de ventana).
-cat > /app/.web/.patch_estoolkit.py << 'PATCHEOF'
-import os, json, shutil, time, sys
-
-pkg_dir  = '/app/.web/node_modules/es-toolkit'
-pkg_path = pkg_dir + '/package.json'
-shim_dir = pkg_dir + '/compat-esm'
-mjs_barrel = pkg_dir + '/dist/compat/index.mjs'
-
-# Esperar hasta 300s a que node_modules esté completamente disponible.
-# 120s era insuficiente cuando bun install corre en cold cache (~130s en AWS t3).
-# Verificamos pkg_dir + package.json + mjs_barrel para evitar race condition
-# con bun install (el dir puede existir antes que todos los archivos estén escritos).
-for i in range(150):
-    if (os.path.isdir(pkg_dir) and
-            os.path.exists(pkg_path) and
-            os.path.exists(mjs_barrel)):
-        # Grace period: esperar 3s más para que bun termine de escribir
-        time.sleep(3)
-        break
-    sys.stdout.write('[PATCH-BG] Esperando es-toolkit... ' + str(i*2) + 's\n')
-    sys.stdout.flush()
-    time.sleep(2)
-
-if not os.path.exists(pkg_path):
-    print('[PATCH-BG] SKIP: es-toolkit package.json no disponible tras 120s')
-    sys.exit(0)
-if not os.path.exists(mjs_barrel):
-    print('[PATCH-BG] SKIP: dist/compat/index.mjs no existe')
-    sys.exit(0)
-
-try:
-    with open(pkg_path) as f:
-        pkg = json.load(f)
-
-    compat_exp = pkg.get('exports', {}).get('./compat/*', {})
-    if isinstance(compat_exp, dict) and compat_exp.get('import', '').startswith('./compat-esm/'):
-        print('[PATCH-BG] es-toolkit ya parcheado — OK')
-        sys.exit(0)
-
-    os.makedirs(shim_dir, exist_ok=True)
-    compat_dir = pkg_dir + '/compat'
-    shim_count = 0
-    if os.path.exists(compat_dir):
-        for fname in sorted(os.listdir(compat_dir)):
-            if fname.endswith('.js') and fname != 'index.js':
-                func = fname[:-3]
-                with open(shim_dir + '/' + func + '.mjs', 'w') as f:
-                    f.write('export { ' + func + ' as default } from "../dist/compat/index.mjs";\n')
-                shim_count += 1
-
-    pkg['exports']['./compat/*'] = {
-        'import':  './compat-esm/*.mjs',
-        'default': './compat/*.js'
-    }
-    with open(pkg_path, 'w') as f:
-        json.dump(pkg, f, indent=2)
-
-    print('[PATCH-BG] es-toolkit parcheado: ' + str(shim_count) + ' shims ESM')
-
-    for d in ['/app/.web/.vite', '/app/.web/node_modules/.vite']:
-        if os.path.exists(d):
-            shutil.rmtree(d)
-            print('[PATCH-BG] cache limpiado: ' + d)
-
-except Exception as e:
-    print('[PATCH-BG] Patch fallo: ' + str(e))
-    import traceback; traceback.print_exc()
-PATCHEOF
-chmod +x /app/.web/.patch_estoolkit.py
-
-# Lanzar watcher en background — corre mientras reflex run instala paquetes.
-# La ventana disponible: bun install (~20s) + Python compile (~60s) = ~80s
-# antes de que Vite production build empiece.
-python3 /app/.web/.patch_estoolkit.py &
-PATCH_PID=$!
-ok "es-toolkit patch watcher lanzado (PID $PATCH_PID)"
-# ─────────────────────────────────────────────────────────────────────────────
 
 # ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
 exec "$@"
