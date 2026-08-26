@@ -735,7 +735,10 @@ class SearchMixin:
         if variant.color:
             parts.append(str(variant.color).strip())
         label = " ".join([p for p in parts if p])
+        # El SKU/código de barras NO va en el label visible (evita mostrar
+        # "42 Negro (uuid)" en inventario); queda solo como fallback si la
+        # variante no tiene talla ni color. El código se muestra aparte.
+        if label:
+            return label
         sku = (variant.sku or "").strip()
-        if label and sku:
-            return f"{label} ({sku})"
-        return label or sku or "Variante"
+        return sku or "Variante"
