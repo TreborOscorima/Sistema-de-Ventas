@@ -271,6 +271,10 @@ class OwnerState:
     owner_companies: list[dict] = []
     owner_companies_total: int = 0
     owner_search: str = ""
+    # Clave de remount del input de búsqueda (no controlado). Se bumpea SOLO al
+    # limpiar/cambiar de pestaña para vaciar el cuadro; nunca al tipear. Evita
+    # que el eco tardío del handler (asyncio.sleep) pise lo recién tipeado.
+    owner_search_key: int = 0
     owner_page: int = 1
     owner_per_page: int = 15
 
@@ -537,6 +541,7 @@ class OwnerState:
         self.owner_active_product_tab = tab
         self.owner_page = 1
         self.owner_search = ""
+        self.owner_search_key += 1  # remonta el input no controlado → se vacía
         yield type(self).owner_load_companies
 
     @rx.event

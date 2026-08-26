@@ -66,8 +66,13 @@ def _search_bar() -> rx.Component:
             rx.icon("search", class_name="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"),
             rx.debounce_input(
                 rx.input(
+                    # NO controlado: sin value=, con key de remount. El handler
+                    # hace asyncio.sleep(0.25) y ese eco tardío, si estuviera
+                    # ligado a value=, se comería letras al tipear rápido. El
+                    # texto en curso lo maneja el estado local del debounce_input;
+                    # el key solo cambia al limpiar (cambio de pestaña) para vaciar.
                     placeholder="Buscar por nombre o RUC...",
-                    value=State.owner_search,
+                    key=State.owner_search_key.to_string(),
                     on_change=State.owner_search_companies,
                     class_name=INPUT_STYLES["search"],
                 ),

@@ -96,3 +96,36 @@ class TestSearchDisplayDecoupling:
         # que alimenta el value= del input permanece intacto → sin clobber.
         assert state.new_sale_item["description"] == "coca"
         assert state.product_search_display == ""
+
+
+class TestOwnerSearchDecoupling:
+    """El buscador de empresas (panel owner) tiene el MISMO patrón: handler con
+    ``asyncio.sleep`` que setea el var del filtro. Se hizo el input NO controlado
+    (sin ``value=``) con ``key=owner_search_key`` que se remonta SOLO al limpiar.
+    Este test fija que cambiar de pestaña vacía el filtro y bumpea el key.
+    """
+
+    @pytest.mark.asyncio
+    async def test_cambiar_tab_limpia_filtro_y_remonta_input(self):
+        from app.models.company import ProductType
+        from app.states.owner_state import OwnerState
+
+        # Stub con `owner_load_companies` como attr de CLASE: el handler hace
+        # `yield type(self).owner_load_companies`, así que type(self) debe tenerlo.
+        class _OwnerStub:
+            owner_load_companies = "LOAD_SENTINEL"
+
+        state = _OwnerStub()
+        state.owner_search = "acme"
+        state.owner_search_key = 0
+        state.owner_active_product_tab = ProductType.VENTAS
+        state.owner_page = 5
+        state.owner_set_product_tab = OwnerState.owner_set_product_tab.__get__(state)
+
+        # owner_set_product_tab es un async generator (hace yield) → lo consumimos.
+        async for _ in state.owner_set_product_tab(ProductType.FOOD):
+            pass
+
+        assert state.owner_search == ""
+        # El key se bumpea para remontar el input NO controlado y vaciar el cuadro.
+        assert state.owner_search_key == 1
