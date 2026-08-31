@@ -750,6 +750,11 @@ class OwnerState:
                         "label": m.get("label", ""),
                         "coming_soon": "true" if m.get("coming_soon") else "false",
                         "habilitado": "true" if m.get("habilitado") else "false",
+                        # 'core' = módulo del núcleo operativo, ON por defecto pero
+                        # apagable (ej. Cocina). 'descripcion' explica qué hace al
+                        # activarlo/desactivarlo. Ambos son opcionales en el payload.
+                        "core": "true" if m.get("core") else "false",
+                        "descripcion": m.get("descripcion", "") or "",
                     }
                     for m in data.get("catalogo", [])
                 ]

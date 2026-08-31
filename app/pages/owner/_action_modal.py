@@ -454,20 +454,43 @@ def _module_card(
 
 
 def _dyn_module_row(m: rx.Var[dict[str, str]]) -> rx.Component:
-    """Fila de módulo del catálogo dinámico (FOOD/LIFE) con toggle."""
+    """Fila de módulo del catálogo dinámico (FOOD/LIFE) con toggle.
+
+    Muestra la descripción y un badge 'Núcleo' cuando el producto los envía en el
+    payload (ej.: Cocina de FOOD, que es núcleo pero apagable por empresa).
+    """
     _off = m["coming_soon"] == "true"
     return rx.el.div(
         rx.el.div(
-            rx.el.span(m["label"], class_name="text-sm font-medium text-slate-800"),
+            rx.el.div(
+                rx.el.span(m["label"], class_name="text-sm font-medium text-slate-800"),
+                rx.cond(
+                    _off,
+                    rx.el.span(
+                        "Próximamente",
+                        class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    m["core"] == "true",
+                    rx.el.span(
+                        "Núcleo",
+                        class_name=f"text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex items-center gap-2 flex-wrap",
+            ),
             rx.cond(
-                _off,
-                rx.el.span(
-                    "Próximamente",
-                    class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                m["descripcion"] != "",
+                rx.el.p(
+                    m["descripcion"],
+                    class_name="text-xs text-slate-500 mt-1 leading-snug",
                 ),
                 rx.fragment(),
             ),
-            class_name="flex items-center gap-2",
+            class_name="flex flex-col min-w-0 pr-3",
         ),
         rx.el.label(
             rx.el.input(
@@ -488,12 +511,12 @@ def _dyn_module_row(m: rx.Var[dict[str, str]]) -> rx.Component:
                     "peer-disabled:opacity-40 peer-disabled:cursor-not-allowed"
                 ),
             ),
-            class_name="inline-flex items-center cursor-pointer flex-shrink-0",
+            class_name="inline-flex items-center cursor-pointer flex-shrink-0 mt-0.5",
         ),
         class_name=rx.cond(
             m["habilitado"] == "true",
-            f"flex items-center justify-between p-3 border border-indigo-200 bg-indigo-50/30 {RADIUS['lg']}",
-            f"flex items-center justify-between p-3 border border-slate-200 bg-white {RADIUS['lg']}",
+            f"flex items-start justify-between p-3 border border-indigo-200 bg-indigo-50/30 {RADIUS['lg']}",
+            f"flex items-start justify-between p-3 border border-slate-200 bg-white {RADIUS['lg']}",
         ),
     )
 
