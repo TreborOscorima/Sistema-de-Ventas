@@ -464,21 +464,32 @@ def _dyn_module_row(m: rx.Var[dict[str, str]]) -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.span(m["label"], class_name="text-sm font-medium text-slate-800"),
+                # Un solo badge de estado, por prioridad: Próximamente → Núcleo
+                # (incluido en todos los planes) → Incluido en plan → Extra.
                 rx.cond(
                     _off,
                     rx.el.span(
                         "Próximamente",
                         class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
                     ),
-                    rx.fragment(),
-                ),
-                rx.cond(
-                    m["core"] == "true",
-                    rx.el.span(
-                        "Núcleo",
-                        class_name=f"text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                    rx.cond(
+                        m["core"] == "true",
+                        rx.el.span(
+                            "Núcleo",
+                            class_name=f"text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                        ),
+                        rx.cond(
+                            m["incluido_en_plan"] == "true",
+                            rx.el.span(
+                                "Incluido en plan",
+                                class_name=f"text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                            ),
+                            rx.el.span(
+                                "Extra",
+                                class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                            ),
+                        ),
                     ),
-                    rx.fragment(),
                 ),
                 class_name="flex items-center gap-2 flex-wrap",
             ),
@@ -590,8 +601,9 @@ def _form_adjust_limits_dynamic() -> rx.Component:
                         class_name="flex items-center gap-1.5",
                     ),
                     rx.el.p(
-                        "Activa o desactiva módulos para esta empresa. Lo que definas acá "
-                        "manda sobre el plan.",
+                        "Activa o desactiva módulos para esta empresa; lo que definas acá "
+                        "manda sobre el plan. \"Incluido en plan\" y \"Núcleo\" vienen "
+                        "habilitados por defecto; \"Extra\" no está en el plan contratado.",
                         class_name="text-xs text-slate-400 mt-0.5",
                     ),
                     rx.el.div(

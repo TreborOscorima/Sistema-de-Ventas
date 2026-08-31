@@ -751,9 +751,11 @@ class OwnerState:
                         "coming_soon": "true" if m.get("coming_soon") else "false",
                         "habilitado": "true" if m.get("habilitado") else "false",
                         # 'core' = módulo del núcleo operativo, ON por defecto pero
-                        # apagable (ej. Cocina). 'descripcion' explica qué hace al
-                        # activarlo/desactivarlo. Ambos son opcionales en el payload.
+                        # apagable (ej. Cocina). 'incluido_en_plan' = el plan ya lo
+                        # trae (si no → "Extra"). 'descripcion' explica qué hace.
+                        # Todos opcionales en el payload.
                         "core": "true" if m.get("core") else "false",
+                        "incluido_en_plan": "true" if m.get("incluido_en_plan") else "false",
                         "descripcion": m.get("descripcion", "") or "",
                     }
                     for m in data.get("catalogo", [])
