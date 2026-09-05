@@ -37,19 +37,34 @@
 
     function normalize(el) {
         if (!el || !el.dataset) return;
-        if (el.dataset.twkTooltipReady === "1") return;
         if (!isIconOnly(el)) return;
         const rawTitle = (el.getAttribute("title") || "").trim();
         const rawAria = (el.getAttribute("aria-label") || "").trim();
-        const normalizedRaw = normalizeTechnicalLabel(rawTitle || rawAria);
+
+        // Ya calculado y sin `title` nuevo que leer → mantener cache.
+        // React re-agrega `title` en el DOM SOLO cuando su valor cambió; por eso
+        // un `title` presente aquí significa que el label reactivo se actualizó
+        // (botones cuyo texto depende del estado: activar/desactivar,
+        // bloquear/desbloquear, etc.) y hay que refrescar el tooltip. Sin esto,
+        // el primer label quedaba cacheado para siempre y mostraba texto viejo.
+        if (el.dataset.twkTooltipReady === "1" && !rawTitle) return;
+
+        const stashed = (el.dataset.twkNativeTitle || "").trim();
+        const source = rawTitle || rawAria || stashed;
+        const normalizedRaw = normalizeTechnicalLabel(source);
         const inferred = inferLabelFromIcon(el);
-        const label = normalizedRaw || rawTitle || rawAria || inferred;
+        const label = normalizedRaw || source || inferred;
         if (!label) return;
 
         el.dataset.twkTooltip = label;
         el.dataset.twkTooltipReady = "1";
-        if (!rawAria) {
+
+        // Mantener aria-label en sync solo si somos nosotros los dueños del
+        // atributo (el elemento no traía aria-label propio). Si React ya lo
+        // controla, no lo pisamos.
+        if (!rawAria || el.dataset.twkAriaOwned === "1") {
             el.setAttribute("aria-label", label);
+            el.dataset.twkAriaOwned = "1";
         }
 
         if (rawTitle) {
